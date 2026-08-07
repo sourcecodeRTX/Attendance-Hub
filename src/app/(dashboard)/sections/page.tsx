@@ -18,7 +18,7 @@ import { createUserSection, deleteUserSectionsByUser } from '@/lib/db/user-secti
 import { logActivity } from '@/lib/db/activity';
 import { db } from '@/lib/db';
 import { sectionSchema, type SectionInput } from '@/lib/utils/validation';
-import type { Branch, Specialisation, Section, User, UserSection } from '@/lib/types';
+import type { Branch, Specialisation, Section, User, UserSection, UserSubject } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -54,12 +54,13 @@ export default function SectionsPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [specialisations, setSpecialisations] = useState<Specialisation[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [userSubjects, setUserSubjects] = useState<UserSubject[]>([]);
+  const [userSections, setUserSections] = useState<UserSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [selectedPrimaryTeacherId, setSelectedPrimaryTeacherId] = useState<string>('none');
 
   const form = useForm<SectionInput>({
     resolver: zodResolver(sectionSchema),
@@ -74,11 +75,13 @@ export default function SectionsPage() {
   const loadData = useCallback(async () => {
     if (!user || !university || !user.departmentId) return;
     try {
-      const [sectionData, branchData, specData, usersData] = await Promise.all([
+      const [sectionData, branchData, specData, usersData, userSubjectsData, userSectionsData] = await Promise.all([
         getSections(university.id, user.departmentId),
         getBranches(university.id, user.departmentId),
         getSpecialisations(university.id),
         db.users.where('universityId').equals(university.id).toArray(),
+        db.userSubjects.where('universityId').equals(university.id).toArray(),
+        db.userSections.where('universityId').equals(university.id).toArray(),
       ]);
 
       const deptSpecs = specData.filter(
@@ -89,6 +92,8 @@ export default function SectionsPage() {
       setBranches(branchData);
       setSpecialisations(deptSpecs);
       setUsers(usersData);
+      setUserSubjects(userSubjectsData);
+      setUserSections(userSectionsData);
     } catch {
       toast.error('Failed to load sections');
     } finally {
@@ -103,13 +108,6 @@ export default function SectionsPage() {
   const branchMap = new Map(branches.map((b) => [b.id, b.name]));
   const specMap = new Map(specialisations.map((s) => [s.id, s.name]));
   const teacherMap = new Map(users.map((u) => [u.id, u.fullName]));
-
-  // Get primary teachers in this department
-  const availablePrimaryTeachers = useMemo(() => {
-    return users.filter(
-      (u) => u.role === 'primary_teacher' && u.departmentId === user?.departmentId && u.isActive
-    );
-  }, [users, user?.departmentId]);
 
   const filteredSections = sections.filter((s) =>
     s.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -130,8 +128,6 @@ export default function SectionsPage() {
         return;
       }
 
-      const primaryTeacherId = selectedPrimaryTeacherId !== 'none' ? selectedPrimaryTeacherId : null;
-
       const newSection: Section = {
         id: sectionId,
         universityId: university.id,
@@ -139,27 +135,13 @@ export default function SectionsPage() {
         branchId: selectedSpec.branchId, // Auto-derived from specialisation
         specialisationId: data.specialisationId,
         name: data.name,
-        primaryTeacherId,
+        primaryTeacherId: null,
         isActive: true,
         isArchived: false,
         createdAt: now,
         createdBy: user.id,
       };
       await createSection(newSection, user.id);
-
-      // If a primary teacher is assigned, create the user_sections entry
-      if (primaryTeacherId) {
-        const userSection: UserSection = {
-          id: crypto.randomUUID(),
-          universityId: university.id,
-          userId: primaryTeacherId,
-          sectionId: sectionId,
-          userRole: 'primary_teacher',
-          assignedAt: now,
-          assignedBy: user.id,
-        };
-        await createUserSection(userSection, user.id);
-      }
 
       await logActivity({
         universityId: university.id,
@@ -175,7 +157,6 @@ export default function SectionsPage() {
 
       setIsCreateOpen(false);
       form.reset();
-      setSelectedPrimaryTeacherId('none');
       toast.success('Section created successfully');
       await loadData();
     } catch (err: unknown) {
@@ -275,7 +256,7 @@ export default function SectionsPage() {
               <TableHead>Name</TableHead>
               <TableHead>Branch</TableHead>
               <TableHead>Specialisation</TableHead>
-              <TableHead>Primary Teacher</TableHead>
+              <TableHead>Assigned Teacher(s)</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
@@ -291,7 +272,18 @@ export default function SectionsPage() {
                   {specMap.get(section.specialisationId) ?? 'Unknown'}
                 </TableCell>
                 <TableCell>
-                  {section.primaryTeacherId ? (teacherMap.get(section.primaryTeacherId) ?? 'Unknown') : 'Unassigned'}
+                  {(() => {
+                    const teacherIds = new Set([
+                      ...userSubjects.filter(us => us.sectionId === section.id).map(us => us.userId),
+                      ...userSections.filter(us => us.sectionId === section.id).map(us => us.userId),
+                      ...(section.primaryTeacherId ? [section.primaryTeacherId] : [])
+                    ]);
+                    if (teacherIds.size === 0) return <span className="text-muted-foreground">Unassigned</span>;
+                    return Array.from(teacherIds)
+                      .map(id => teacherMap.get(id) || 'Unknown')
+                      .filter((v, i, a) => a.indexOf(v) === i)
+                      .join(', ');
+                  })()}
                 </TableCell>
                 <TableCell>
                   <Badge
@@ -354,12 +346,14 @@ export default function SectionsPage() {
                 name="specialisationId"
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a specialisation" />
+                    <SelectTrigger className="w-full flex-1 min-w-0" style={{ maxWidth: '100%' }}>
+                      <div className="truncate">
+                        <SelectValue placeholder="Select a specialisation" />
+                      </div>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
                       {specialisations.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
+                        <SelectItem key={s.id} value={s.id} className="truncate">
                           {s.name} ({branchMap.get(s.branchId)})
                         </SelectItem>
                       ))}
@@ -372,29 +366,6 @@ export default function SectionsPage() {
                   {form.formState.errors.specialisationId.message}
                 </p>
               )}
-            </div>
-
-            <div className="space-y-1.5">
-              <Label>Primary Teacher (Optional)</Label>
-              <Select 
-                value={selectedPrimaryTeacherId} 
-                onValueChange={(v) => { if (v) setSelectedPrimaryTeacherId(v); }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a primary teacher" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None (Assign Later)</SelectItem>
-                  {availablePrimaryTeachers.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.fullName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                You can assign a primary teacher now or later.
-              </p>
             </div>
 
             <DialogFooter>

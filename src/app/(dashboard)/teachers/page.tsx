@@ -474,14 +474,14 @@ export default function TeachersPage() {
       <div>
         <h1 className="text-2xl font-bold">Teachers</h1>
         <p className="text-sm text-muted-foreground">
-          Manage teacher accounts and subject assignments
+          Manage teacher accounts, subjects, and section assignments
         </p>
       </div>
 
       <Tabs defaultValue="teachers">
         <TabsList>
           <TabsTrigger value="teachers">Teachers</TabsTrigger>
-          <TabsTrigger value="assignments">Subject Assignments</TabsTrigger>
+          <TabsTrigger value="assignments">Subject & Section Assignments</TabsTrigger>
         </TabsList>
 
         <TabsContent value="teachers">
@@ -576,7 +576,7 @@ export default function TeachersPage() {
             {/* Assignment Form */}
             <div className="rounded-lg border p-4 space-y-4">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-medium">Assign Subjects to Teacher</h3>
+                <h3 className="text-sm font-medium">Assign Subjects & Sections to Teacher</h3>
                 <HelpTooltip content={HELP_TOOLTIPS.teacherAssignment} />
               </div>
               
