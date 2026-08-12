@@ -19,6 +19,7 @@ export type ActivityActionType =
   | 'teacher_subjects_assigned'
   | 'teacher_subject_removed'
   | 'teacher_assigned'
+  | 'teacher_assignment_removed'
   | 'regular_teacher_assigned'
   | 'cr_assigned'
   | 'cr_deleted'

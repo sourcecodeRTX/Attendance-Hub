@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -16,7 +16,7 @@ import { getDepartments, getSections } from '@/lib/db/university';
 import { getStudents } from '@/lib/db/students';
 import { getSubjects } from '@/lib/db/subjects';
 import { getAttendanceSessions } from '@/lib/db/attendance';
-import { getUserSections, getUserSubjects } from '@/lib/db/user-sections';
+import { getUserSections, getUserSubjects, getPrimarySectionId } from '@/lib/db/user-sections';
 import { getActivityLogs } from '@/lib/db/activity';
 import { db } from '@/lib/db';
 import type { AttendanceSession, ActivityLog } from '@/lib/types';
@@ -352,49 +352,136 @@ function AdminDashboard() {
   );
 }
 
-/* â”€â”€ Primary Teacher (section-scoped) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Unified Teacher Dashboard (primary + regular) ─────────────── */
 
-function PrimaryTeacherDashboard() {
+function TeacherDashboard() {
   const { user, university } = useAuthStore();
   const [studentCount, setStudentCount] = useState(0);
   const [todaySessions, setTodaySessions] = useState(0);
-  const [sectionAttendance, setSectionAttendance] = useState(0);
+  const [overallAttendance, setOverallAttendance] = useState(0);
   const [subjectCount, setSubjectCount] = useState(0);
-  const [subjectSummary, setSubjectSummary] = useState<{ name: string; code: string; sessions: number; attendance: number }[]>([]);
+  const [subjectSummary, setSubjectSummary] = useState<{ name: string; code: string; sessions: number; attendance: number; type: 'primary' | 'regular'; sectionName: string }[]>([]);
   const [crSessions, setCrSessions] = useState<AttendanceSession[]>([]);
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   useEffect(() => {
     if (!user || !university) return;
 
     (async () => {
-      const userSections = await getUserSections(user.id);
-      if (userSections.length === 0) return;
-      const sectionId = userSections[0].sectionId;
+      try {
+        const primarySectionId = await getPrimarySectionId(user.id);
+        const userSubjectsData = await getUserSubjects(user.id);
 
-      const [students, subjects, sessions] = await Promise.all([
-        getStudents(sectionId),
-        getSubjects(sectionId),
-        getAttendanceSessions(sectionId),
-      ]);
+        if (!primarySectionId && userSubjectsData.length === 0) {
+          setDataLoaded(true);
+          return;
+        }
 
-      setStudentCount(students.filter((s) => s.isActive).length);
-      setSubjectCount(subjects.length);
-      setTodaySessions(sessions.filter((s) => s.date === TODAY).length);
-      setSectionAttendance(calcAttendancePercent(sessions));
+        const allSectionIds = new Set<string>();
+        if (primarySectionId) allSectionIds.add(primarySectionId);
+        userSubjectsData.forEach(us => allSectionIds.add(us.sectionId));
 
-      setSubjectSummary(
-        subjects.map((sub) => {
-          const subSess = sessions.filter((s) => s.subjectId === sub.id);
-          return { name: sub.name, code: sub.code, sessions: subSess.length, attendance: calcAttendancePercent(subSess) };
-        }),
-      );
+        const sectionNameMap = new Map<string, string>();
+        await Promise.all(
+          Array.from(allSectionIds).map(async (sid) => {
+            const sec = await db.sections.get(sid);
+            if (sec) sectionNameMap.set(sec.id, sec.name);
+          })
+        );
 
-      setCrSessions(
-        sessions
-          .filter((s) => s.createdBy?.role === 'cr')
-          .sort((a, b) => (b.createdBy?.markedAt ?? '').localeCompare(a.createdBy?.markedAt ?? ''))
-          .slice(0, 10),
-      );
+        let primaryStudents: Awaited<ReturnType<typeof getStudents>> = [];
+        let primarySessions: AttendanceSession[] = [];
+        let primarySubjects: Awaited<ReturnType<typeof getSubjects>> = [];
+
+        if (primarySectionId) {
+          [primaryStudents, primarySubjects, primarySessions] = await Promise.all([
+            getStudents(primarySectionId),
+            getSubjects(primarySectionId),
+            getAttendanceSessions(primarySectionId),
+          ]);
+        }
+
+        const combinedSummary: typeof subjectSummary = [];
+        const allSessions: AttendanceSession[] = [...primarySessions];
+        let todayCount = primarySessions.filter(s => s.date === TODAY).length;
+        const processedSubjectSections = new Set<string>();
+
+        if (primarySectionId) {
+          const primarySectionName = sectionNameMap.get(primarySectionId) ?? 'Unknown Section';
+          for (const sub of primarySubjects) {
+            const key = `${sub.id}|${primarySectionId}`;
+            processedSubjectSections.add(key);
+            const subSess = primarySessions.filter(s => s.subjectId === sub.id);
+            combinedSummary.push({
+              name: sub.name,
+              code: sub.code,
+              sessions: subSess.length,
+              attendance: calcAttendancePercent(subSess),
+              type: 'primary',
+              sectionName: primarySectionName,
+            });
+          }
+        }
+
+        await Promise.all(
+          userSubjectsData.map(async (us) => {
+            const key = `${us.subjectId}|${us.sectionId}`;
+            if (processedSubjectSections.has(key)) return;
+            processedSubjectSections.add(key);
+
+            const sub = await db.subjects.get(us.subjectId);
+            if (!sub) return;
+
+            const regSessions = await getAttendanceSessions(us.sectionId);
+            const subSess = regSessions.filter(s => s.subjectId === sub.id);
+            
+            if (us.sectionId !== primarySectionId) {
+              allSessions.push(...subSess);
+              todayCount += subSess.filter(s => s.date === TODAY).length;
+            }
+
+            const section = await db.sections.get(us.sectionId);
+            const isPrimaryForThisSection = section?.primaryTeacherId === user.id;
+
+            combinedSummary.push({
+              name: sub.name,
+              code: sub.code,
+              sessions: subSess.length,
+              attendance: calcAttendancePercent(subSess),
+              type: isPrimaryForThisSection ? 'primary' : 'regular',
+              sectionName: sectionNameMap.get(us.sectionId) ?? 'Unknown',
+            });
+          })
+        );
+
+        const activeStudentCount = primaryStudents.filter(s => s.isActive).length;
+        const regularSectionIds = Array.from(allSectionIds).filter(sid => sid !== primarySectionId);
+        let regularStudentCount = 0;
+        for (const sid of regularSectionIds) {
+          const studs = await getStudents(sid);
+          regularStudentCount += studs.filter(s => s.isActive).length;
+        }
+
+        setStudentCount(activeStudentCount + regularStudentCount);
+        setSubjectCount(combinedSummary.length);
+        setTodaySessions(todayCount);
+        setOverallAttendance(calcAttendancePercent(allSessions));
+        setSubjectSummary(combinedSummary);
+
+        if (primarySessions.length > 0) {
+          setCrSessions(
+            primarySessions
+              .filter(s => s.createdBy?.role === 'cr')
+              .sort((a, b) => (b.createdBy?.markedAt ?? '').localeCompare(a.createdBy?.markedAt ?? ''))
+              .slice(0, 10),
+          );
+        }
+
+        setDataLoaded(true);
+      } catch (err) {
+        console.error('TeacherDashboard: Error loading data:', err);
+        setDataLoaded(true);
+      }
     })();
   }, [user, university]);
 
@@ -405,7 +492,7 @@ function PrimaryTeacherDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={<GraduationCap className="h-4 w-4" />} title="Total Students" value={studentCount} />
         <StatCard icon={<Clock className="h-4 w-4" />} title="Today&apos;s Sessions" value={todaySessions} />
-        <StatCard icon={<BarChart3 className="h-4 w-4" />} title="Section Attendance" value={`${sectionAttendance}%`} />
+        <StatCard icon={<BarChart3 className="h-4 w-4" />} title="Overall Attendance" value={`${overallAttendance}%`} />
         <StatCard icon={<BookOpen className="h-4 w-4" />} title="Subjects" value={subjectCount} />
       </div>
 
@@ -419,7 +506,7 @@ function PrimaryTeacherDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Subject-wise Attendance</CardTitle>
-            <CardDescription>Attendance breakdown by subject</CardDescription>
+            <CardDescription>Attendance breakdown by subject across all assigned sections</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -427,15 +514,25 @@ function PrimaryTeacherDashboard() {
                 <TableRow>
                   <TableHead>Subject</TableHead>
                   <TableHead>Code</TableHead>
+                  <TableHead>Section</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead className="text-center">Sessions</TableHead>
                   <TableHead className="text-center">Attendance %</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {subjectSummary.map((s) => (
-                  <TableRow key={s.code}>
+                  <TableRow key={`${s.code}-${s.sectionName}-${s.type}`}>
                     <TableCell className="font-medium">{s.name}</TableCell>
                     <TableCell>{s.code}</TableCell>
+                    <TableCell>{s.sectionName}</TableCell>
+                    <TableCell>
+                      {s.type === 'primary' ? (
+                        <Badge variant="default">Primary Class</Badge>
+                      ) : (
+                        <Badge variant="secondary">Regular Class</Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-center">{s.sessions}</TableCell>
                     <TableCell className="text-center">
                       <Badge variant={s.attendance < threshold ? 'destructive' : 'secondary'}>{s.attendance}%</Badge>
@@ -444,6 +541,16 @@ function PrimaryTeacherDashboard() {
                 ))}
               </TableBody>
             </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {dataLoaded && subjectSummary.length === 0 && (
+        <Card>
+          <CardContent className="py-8">
+            <p className="text-center text-muted-foreground">
+              No subjects or sections assigned yet. Please contact your admin to get assigned.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -475,113 +582,6 @@ function PrimaryTeacherDashboard() {
   );
 }
 
-/* â”€â”€ Regular Teacher (subject-scoped) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
-
-function RegularTeacherDashboard() {
-  const { user, university } = useAuthStore();
-  const [assignedCount, setAssignedCount] = useState(0);
-  const [todaySessions, setTodaySessions] = useState(0);
-  const [overallAttendance, setOverallAttendance] = useState(0);
-  const [subjectList, setSubjectList] = useState<{ name: string; code: string; sectionName: string; sessions: number; attendance: number }[]>([]);
-
-  useEffect(() => {
-    if (!user || !university) return;
-
-    (async () => {
-      const userSubjects = await getUserSubjects(user.id);
-      setAssignedCount(userSubjects.length);
-      if (userSubjects.length === 0) return;
-
-      const sectionIds = [...new Set(userSubjects.map((us) => us.sectionId))];
-
-      const sectionNameMap = new Map<string, string>();
-      await Promise.all(
-        sectionIds.map(async (sid) => {
-          const sec = await db.sections.get(sid);
-          if (sec) sectionNameMap.set(sec.id, sec.name);
-        }),
-      );
-
-      const sessionsBySection = new Map<string, AttendanceSession[]>();
-      await Promise.all(
-        sectionIds.map(async (sid) => {
-          sessionsBySection.set(sid, await getAttendanceSessions(sid));
-        }),
-      );
-
-      const allRelevant: AttendanceSession[] = [];
-      let todayCount = 0;
-      const list: typeof subjectList = [];
-
-      for (const us of userSubjects) {
-        const secSess = sessionsBySection.get(us.sectionId) ?? [];
-        const subSess = secSess.filter((s) => s.subjectId === us.subjectId);
-        allRelevant.push(...subSess);
-        todayCount += subSess.filter((s) => s.date === TODAY).length;
-
-        const sub = await db.subjects.get(us.subjectId);
-        list.push({
-          name: sub?.name ?? 'Unknown',
-          code: sub?.code ?? '',
-          sectionName: sectionNameMap.get(us.sectionId) ?? 'Unknown',
-          sessions: subSess.length,
-          attendance: calcAttendancePercent(subSess),
-        });
-      }
-
-      setTodaySessions(todayCount);
-      setOverallAttendance(calcAttendancePercent(allRelevant));
-      setSubjectList(list);
-    })();
-  }, [user, university]);
-
-  const threshold = university?.attendanceThreshold ?? 75;
-
-  return (
-    <>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard icon={<BookOpen className="h-4 w-4" />} title="Assigned Subjects" value={assignedCount} />
-        <StatCard icon={<Clock className="h-4 w-4" />} title="Today&apos;s Sessions" value={todaySessions} />
-        <StatCard icon={<BarChart3 className="h-4 w-4" />} title="Overall Attendance" value={`${overallAttendance}%`} />
-      </div>
-
-      {subjectList.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Assigned Subjects</CardTitle>
-            <CardDescription>Your subjects with attendance overview</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Subject</TableHead>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Section</TableHead>
-                  <TableHead className="text-center">Sessions</TableHead>
-                  <TableHead className="text-center">Attendance %</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {subjectList.map((s, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="font-medium">{s.name}</TableCell>
-                    <TableCell>{s.code}</TableCell>
-                    <TableCell>{s.sectionName}</TableCell>
-                    <TableCell className="text-center">{s.sessions}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={s.attendance < threshold ? 'destructive' : 'secondary'}>{s.attendance}%</Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
-    </>
-  );
-}
 
 /* â”€â”€ CR (section-scoped) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
@@ -597,9 +597,8 @@ function CRDashboard() {
     const threshold = university.attendanceThreshold ?? 75;
 
     (async () => {
-      const userSections = await getUserSections(user.id);
-      if (userSections.length === 0) return;
-      const sectionId = userSections[0].sectionId;
+      const sectionId = await getPrimarySectionId(user.id);
+      if (!sectionId) return;
 
       const [students, subjects, sessions] = await Promise.all([
         getStudents(sectionId),
@@ -753,8 +752,7 @@ export default function DashboardPage() {
 
       {user.role === 'super_admin' && <SuperAdminDashboard />}
       {user.role === 'admin' && <AdminDashboard />}
-      {user.role === 'primary_teacher' && <PrimaryTeacherDashboard />}
-      {user.role === 'regular_teacher' && <RegularTeacherDashboard />}
+      {(user.role === 'primary_teacher' || user.role === 'regular_teacher') && <TeacherDashboard />}
       {user.role === 'cr' && <CRDashboard />}
     </div>
   );

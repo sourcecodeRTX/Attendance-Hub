@@ -38,6 +38,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog';
 import {
   Table,
@@ -60,12 +61,15 @@ export default function SectionsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteSectionState, setDeleteSectionState] = useState<Section | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   const form = useForm<SectionInput>({
     resolver: zodResolver(sectionSchema),
     defaultValues: {
       name: '',
+      branchId: '',
       specialisationId: '',
     },
   });
@@ -120,20 +124,12 @@ export default function SectionsPage() {
       const now = new Date().toISOString();
       const sectionId = crypto.randomUUID();
 
-      // Get the selected specialisation to derive branchId
-      const selectedSpec = specialisations.find(s => s.id === data.specialisationId);
-      if (!selectedSpec) {
-        toast.error('Invalid specialisation selected');
-        setSubmitting(false);
-        return;
-      }
-
       const newSection: Section = {
         id: sectionId,
         universityId: university.id,
         departmentId: user.departmentId,
-        branchId: selectedSpec.branchId, // Auto-derived from specialisation
-        specialisationId: data.specialisationId,
+        branchId: data.branchId,
+        specialisationId: data.specialisationId || null,
         name: data.name,
         primaryTeacherId: null,
         isActive: true,
@@ -151,8 +147,8 @@ export default function SectionsPage() {
         performedByName: user.fullName,
         performedById: user.id,
         targetName: data.name,
-        branchName: branchMap.get(selectedSpec.branchId),
-        details: { specialisation: specMap.get(data.specialisationId) },
+        branchName: branchMap.get(data.branchId),
+        details: { specialisation: data.specialisationId ? specMap.get(data.specialisationId) : 'None' },
       });
 
       setIsCreateOpen(false);
@@ -168,7 +164,7 @@ export default function SectionsPage() {
     }
   });
 
-  const handleDelete = async (section: Section) => {
+  const confirmDelete = async (section: Section) => {
     if (!user || !university) return;
 
     const activeStudents = await db.students
@@ -184,9 +180,16 @@ export default function SectionsPage() {
       return;
     }
 
-    setDeletingId(section.id);
+    setDeleteSectionState(section);
+    setDeleteOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!user || !university || !deleteSectionState) return;
+
+    setDeleteSubmitting(true);
     try {
-      await deleteSection(section.id, university.id, user.id);
+      await deleteSection(deleteSectionState.id, university.id, user.id);
 
       await logActivity({
         universityId: university.id,
@@ -195,16 +198,18 @@ export default function SectionsPage() {
         performedByRole: user.role,
         performedByName: user.fullName,
         performedById: user.id,
-        targetName: section.name,
-        branchName: branchMap.get(section.branchId),
+        targetName: deleteSectionState.name,
+        branchName: branchMap.get(deleteSectionState.branchId),
       });
 
       toast.success('Section deleted');
+      setDeleteOpen(false);
+      setDeleteSectionState(null);
       await loadData();
     } catch {
       toast.error('Failed to delete section');
     } finally {
-      setDeletingId(null);
+      setDeleteSubmitting(false);
     }
   };
 
@@ -269,7 +274,7 @@ export default function SectionsPage() {
                   {branchMap.get(section.branchId) ?? 'Unknown'}
                 </TableCell>
                 <TableCell>
-                  {specMap.get(section.specialisationId) ?? 'Unknown'}
+                  {section.specialisationId ? (specMap.get(section.specialisationId) ?? 'Unknown') : 'Unknown'}
                 </TableCell>
                 <TableCell>
                   {(() => {
@@ -294,13 +299,13 @@ export default function SectionsPage() {
                 </TableCell>
                 <TableCell>
                   <Button
-                    variant="destructive"
+                    variant="ghost"
                     size="sm"
-                    disabled={deletingId === section.id}
-                    onClick={() => handleDelete(section)}
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => confirmDelete(section)}
                   >
                     <Trash2 className="size-3.5" data-icon="inline-start" />
-                    {deletingId === section.id ? 'Deleting...' : 'Delete'}
+                    Delete
                   </Button>
                 </TableCell>
               </TableRow>
@@ -318,7 +323,7 @@ export default function SectionsPage() {
               <HelpTooltip content={HELP_TOOLTIPS.sectionCreate} />
             </div>
             <DialogDescription>
-              Add a new section within a specialisation.
+              Add a new section within a branch and optionally a specialisation.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4">
@@ -337,24 +342,57 @@ export default function SectionsPage() {
             </div>
 
             <div className="space-y-1.5">
+              <Label>Branch</Label>
+              <Controller
+                control={form.control}
+                name="branchId"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={(val) => {
+                    field.onChange(val);
+                    form.setValue('specialisationId', ''); // Reset spec when branch changes
+                  }}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select a branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branches.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {form.formState.errors.branchId && (
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.branchId.message}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
               <div className="flex items-center gap-1">
-                <Label>Specialisation</Label>
+                <Label>Specialisation (Optional)</Label>
                 <HelpTooltip content={HELP_TOOLTIPS.specialisation} />
               </div>
               <Controller
                 control={form.control}
                 name="specialisationId"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select value={field.value} onValueChange={field.onChange} disabled={!form.watch('branchId')}>
                     <SelectTrigger className="w-full flex-1 min-w-0" style={{ maxWidth: '100%' }}>
                       <div className="truncate">
-                        <SelectValue placeholder="Select a specialisation" />
+                        <SelectValue placeholder="Select a specialisation or None" />
                       </div>
                     </SelectTrigger>
                     <SelectContent className="max-w-[calc(100vw-2rem)] sm:max-w-md">
-                      {specialisations.map((s) => (
+                      <SelectItem value="">None / Not Applicable</SelectItem>
+                      {specialisations
+                        .filter(s => s.branchId === form.watch('branchId'))
+                        .map((s) => (
                         <SelectItem key={s.id} value={s.id} className="truncate">
-                          {s.name} ({branchMap.get(s.branchId)})
+                          {s.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -374,6 +412,33 @@ export default function SectionsPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteOpen} onOpenChange={(open) => {
+        setDeleteOpen(open);
+        if (!open) setDeleteSectionState(null);
+      }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Section</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. This will permanently delete the section{' '}
+              <span className="font-semibold text-foreground">
+                {deleteSectionState?.name}
+              </span>.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteConfirm}
+              disabled={deleteSubmitting}
+            >
+              {deleteSubmitting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

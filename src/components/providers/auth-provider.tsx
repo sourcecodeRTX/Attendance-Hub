@@ -118,43 +118,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           startSyncLoop();
 
-          // Do not block first render on university metadata fetch.
-          void (async () => {
-            try {
-              const { data: uni, error: uniError } = await supabase
-                .from('universities')
-                .select('*')
-                .eq('id', userProfile.university_id)
-                .maybeSingle();
+          // Fetch university and pull cloud data in parallel.
+          // Both must complete before we consider the profile fully loaded
+          // so that pages have data in local Dexie when they render.
+          await Promise.allSettled([
+            (async () => {
+              try {
+                const { data: uni, error: uniError } = await supabase
+                  .from('universities')
+                  .select('*')
+                  .eq('id', userProfile.university_id)
+                  .maybeSingle();
 
-              if (uniError) {
-                console.error('Error loading university:', uniError);
-                return;
+                if (uniError) {
+                  console.error('Error loading university:', uniError);
+                  return;
+                }
+
+                if (uni) {
+                  setUniversity({
+                    id: uni.id,
+                    name: uni.name,
+                    code: uni.code,
+                    superAdminId: uni.super_admin_id,
+                    attendanceThreshold: uni.attendance_threshold,
+                    createdAt: uni.created_at,
+                  });
+                }
+              } catch (uniFetchError) {
+                console.error('University fetch failed:', uniFetchError);
               }
-
-              if (uni) {
-                setUniversity({
-                  id: uni.id,
-                  name: uni.name,
-                  code: uni.code,
-                  superAdminId: uni.super_admin_id,
-                  attendanceThreshold: uni.attendance_threshold,
-                  createdAt: uni.created_at,
-                });
+            })(),
+            (async () => {
+              try {
+                await pullFromCloud(userProfile.university_id);
+              } catch (syncError) {
+                console.error('Initial data sync failed:', syncError);
               }
-            } catch (uniFetchError) {
-              console.error('University fetch failed:', uniFetchError);
-            }
-          })();
-
-          // Keep login fast: do initial cloud pull in background.
-          void (async () => {
-            try {
-              await pullFromCloud(userProfile.university_id);
-            } catch (syncError) {
-              console.error('Initial data sync failed:', syncError);
-            }
-          })();
+            })(),
+          ]);
 
           const elapsedMs = Date.now() - startedAt;
           if (elapsedMs > 4000) {

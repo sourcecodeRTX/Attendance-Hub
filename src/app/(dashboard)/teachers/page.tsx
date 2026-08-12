@@ -7,8 +7,8 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import { Plus, Search, Copy, Pencil, Trash2, X, Check } from 'lucide-react';
 import { useAuthStore } from '@/lib/stores/auth-store';
-import { getSections } from '@/lib/db/university';
-import { createUserSubject, deleteUserSectionsByUser, updateUserRole, deleteUserSubject } from '@/lib/db/user-sections';
+import { getSections, updateSection } from '@/lib/db/university';
+import { createUserSubject, createUserSection, deleteUserSectionsByUser, updateUserRole, deleteUserSubject } from '@/lib/db/user-sections';
 import { logActivity } from '@/lib/db/activity';
 import { createManagedAuthUser } from '../actions';
 import { supabase } from '@/lib/supabase/client';
@@ -35,6 +35,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog';
 import {
   Table,
@@ -82,7 +83,9 @@ export default function TeachersPage() {
   const [pendingAssignments, setPendingAssignments] = useState<Array<{
     subjectId: string;
     sectionIds: string[];
+    assignmentType: 'primary' | 'regular';
   }>>([]);
+  const [currentAssignmentType, setCurrentAssignmentType] = useState<'primary' | 'regular'>('regular');
   const [contextualMenuOpen, setContextualMenuOpen] = useState(false);
   const [selectedSectionsForSubject, setSelectedSectionsForSubject] = useState<string[]>([]);
   const [assigning, setAssigning] = useState(false);
@@ -92,6 +95,9 @@ export default function TeachersPage() {
   const [editingTeacher, setEditingTeacher] = useState<User | null>(null);
   const [editRole, setEditRole] = useState<'primary_teacher' | 'regular_teacher'>('regular_teacher');
   const [editSubmitting, setEditSubmitting] = useState(false);
+
+  const [removeAssignmentState, setRemoveAssignmentState] = useState<UserSubject | null>(null);
+  const [removeAssignmentSubmitting, setRemoveAssignmentSubmitting] = useState(false);
 
   const form = useForm<CreateTeacherFormData>({
     resolver: zodResolver(createTeacherFormSchema),
@@ -220,15 +226,15 @@ export default function TeachersPage() {
     
     // Add to pending assignments
     setPendingAssignments((prev) => {
-      const existing = prev.find(p => p.subjectId === assignSubjectId);
+      const existing = prev.find(p => p.subjectId === assignSubjectId && p.assignmentType === currentAssignmentType);
       if (existing) {
         return prev.map(p => 
-          p.subjectId === assignSubjectId 
+          p.subjectId === assignSubjectId && p.assignmentType === currentAssignmentType
             ? { ...p, sectionIds: [...p.sectionIds, ...selectedSectionsForSubject] }
             : p
         );
       }
-      return [...prev, { subjectId: assignSubjectId, sectionIds: selectedSectionsForSubject }];
+      return [...prev, { subjectId: assignSubjectId, sectionIds: selectedSectionsForSubject, assignmentType: currentAssignmentType }];
     });
     
     setContextualMenuOpen(false);
@@ -259,6 +265,24 @@ export default function TeachersPage() {
       
       for (const assignment of pendingAssignments) {
         for (const sectionId of assignment.sectionIds) {
+          const targetSection = sections.find(s => s.id === sectionId);
+          
+          if (assignment.assignmentType === 'primary') {
+            const teacherPrimarySection = sections.find(s => s.primaryTeacherId === teacher?.id);
+            if (teacherPrimarySection && teacherPrimarySection.id !== targetSection?.id) {
+              toast.error(`${teacher?.fullName} is already the Primary Teacher for ${teacherPrimarySection.name}. A teacher can only be Primary for one section.`);
+              setAssigning(false);
+              return;
+            }
+
+            if (targetSection?.primaryTeacherId && targetSection.primaryTeacherId !== teacher?.id) {
+              const existingTeacher = teachers.find(t => t.id === targetSection.primaryTeacherId);
+              toast.error(`Section ${targetSection.name} already has a Primary Teacher (${existingTeacher?.fullName ?? 'Unknown'}).`);
+              setAssigning(false);
+              return;
+            }
+          }
+
           await createUserSubject(
             {
               id: crypto.randomUUID(),
@@ -271,6 +295,26 @@ export default function TeachersPage() {
             },
             user.id
           );
+
+          if (assignment.assignmentType === 'primary' && targetSection && targetSection.primaryTeacherId !== teacher?.id) {
+            await updateSection({ ...targetSection, primaryTeacherId: teacher?.id ?? null }, user.id);
+            if (teacher && teacher.role !== 'primary_teacher') {
+              await updateUserRole(teacher.id, university.id, 'primary_teacher', user.id);
+            }
+            // Create user_sections entry so RLS policies and data loading work for the teacher
+            await createUserSection(
+              {
+                id: crypto.randomUUID(),
+                universityId: university.id,
+                userId: teacher!.id,
+                sectionId: sectionId,
+                userRole: 'primary_teacher',
+                assignedAt: new Date().toISOString(),
+                assignedBy: user.id,
+              },
+              user.id
+            );
+          }
         }
       }
 
@@ -299,13 +343,22 @@ export default function TeachersPage() {
     }
   };
 
+  // Confirm removing an assignment
+  const confirmRemoveExistingAssignment = (assignmentId: string) => {
+    const assignment = userSubjects.find(us => us.id === assignmentId);
+    if (assignment) {
+      setRemoveAssignmentState(assignment);
+    }
+  };
+
   // Handle removing an existing assignment
-  const handleRemoveExistingAssignment = async (assignmentId: string) => {
-    if (!user || !university) return;
+  const handleRemoveExistingAssignmentConfirm = async () => {
+    if (!user || !university || !removeAssignmentState) return;
+    setRemoveAssignmentSubmitting(true);
     
     try {
-      const assignment = userSubjects.find(us => us.id === assignmentId);
-      if (!assignment) return;
+      const assignmentId = removeAssignmentState.id;
+      const assignment = removeAssignmentState;
       
       const teacher = teachers.find(t => t.id === assignment.userId);
       const subject = subjects.find(s => s.id === assignment.subjectId);
@@ -316,19 +369,22 @@ export default function TeachersPage() {
       await logActivity({
         universityId: university.id,
         departmentId: user.departmentId,
-        actionType: 'teacher_subject_removed',
+        actionType: 'teacher_assignment_removed',
         performedByRole: user.role,
         performedByName: user.fullName,
         performedById: user.id,
-        targetName: teacher?.fullName,
-        sectionName: section?.name,
-        details: { subject: subject?.name },
+        targetName: teacher?.fullName ?? 'Unknown Teacher',
+        sectionName: section?.name ?? 'Unknown Section',
+        details: { subject: subject?.name ?? 'Unknown Subject' },
       });
-      
-      toast.success('Assignment removed');
+
+      toast.success('Assignment removed successfully');
+      setRemoveAssignmentState(null);
       await loadData();
     } catch {
       toast.error('Failed to remove assignment');
+    } finally {
+      setRemoveAssignmentSubmitting(false);
     }
   };
 
@@ -582,7 +638,7 @@ export default function TeachersPage() {
               
               {/* Step 1: Select Teacher */}
               <div className="space-y-1.5">
-                <Label>Teacher (Primary or Regular)</Label>
+                <Label>Teacher</Label>
                 <Select
                   value={assignTeacherId}
                   onValueChange={(v) => { if (v) handleTeacherChange(v); }}
@@ -599,6 +655,26 @@ export default function TeachersPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Step 1.5: Assignment Type */}
+              {assignTeacherId && (
+                <div className="space-y-1.5">
+                  <Label>Assignment Type</Label>
+                  <Select
+                    value={currentAssignmentType}
+                    onValueChange={(v) => setCurrentAssignmentType(v as 'primary' | 'regular')}
+                    disabled={contextualMenuOpen}
+                  >
+                    <SelectTrigger className="w-full sm:max-w-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="regular">Regular Assignment</SelectItem>
+                      <SelectItem value="primary">Primary (Incharge) Assignment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {/* Step 2: Select Subject (only shown after teacher selected) */}
               {assignTeacherId && (
@@ -663,6 +739,10 @@ export default function TeachersPage() {
                               checked={selectedSectionsForSubject.includes(section.id)}
                               onCheckedChange={(checked) => {
                                 if (checked) {
+                                  if (currentAssignmentType === 'primary' && selectedSectionsForSubject.length >= 1) {
+                                    toast.error('You can only select ONE section for a Primary Assignment.');
+                                    return;
+                                  }
                                   setSelectedSectionsForSubject([...selectedSectionsForSubject, section.id]);
                                 } else {
                                   setSelectedSectionsForSubject(
@@ -701,16 +781,16 @@ export default function TeachersPage() {
                         const subject = subjects.find(s => s.id === pa.subjectId);
                         const section = sections.find(s => s.id === sectionId);
                         return (
-                          <Badge key={`${pa.subjectId}-${sectionId}`} variant="secondary" className="gap-1">
-                            {subject?.code} - {section?.name}
-                            <button
-                              type="button"
-                              onClick={() => handleRemovePendingAssignment(pa.subjectId, sectionId)}
-                              className="ml-1 hover:text-destructive"
-                            >
-                              <X className="size-3" />
-                            </button>
-                          </Badge>
+                            <Badge key={`${pa.subjectId}-${sectionId}-${pa.assignmentType}`} variant="secondary" className="gap-1">
+                              {subject?.code} - {section?.name} ({pa.assignmentType === 'primary' ? 'Primary' : 'Regular'})
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePendingAssignment(pa.subjectId, sectionId)}
+                                className="ml-1 hover:text-destructive"
+                              >
+                                <X className="size-3" />
+                              </button>
+                            </Badge>
                         );
                       })
                     )}
@@ -763,7 +843,9 @@ export default function TeachersPage() {
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline" className="text-xs">
-                                {ROLE_LABELS[teacher?.role ?? ''] ?? teacher?.role}
+                                {userSections.some(us => us.userId === assignment.userId && us.sectionId === assignment.sectionId && us.userRole === 'primary_teacher')
+                                  ? 'Primary Teacher' 
+                                  : 'Regular Teacher'}
                               </Badge>
                             </TableCell>
                             <TableCell>
@@ -778,12 +860,12 @@ export default function TeachersPage() {
                               ).toLocaleDateString()}
                             </TableCell>
                             <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                onClick={() => handleRemoveExistingAssignment(assignment.id)}
-                                title="Remove assignment"
-                              >
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={() => confirmRemoveExistingAssignment(assignment.id)}
+                                  title="Remove assignment"
+                                >
                                 <Trash2 className="size-3.5 text-destructive" />
                               </Button>
                             </TableCell>
@@ -988,6 +1070,29 @@ export default function TeachersPage() {
               disabled={editSubmitting || editRole === editingTeacher?.role}
             >
               {editSubmitting ? 'Updating...' : 'Update Role'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!removeAssignmentState} onOpenChange={(open) => {
+        if (!open) setRemoveAssignmentState(null);
+      }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remove Assignment</DialogTitle>
+            <DialogDescription>
+              This action cannot be undone. This will permanently remove the teacher&apos;s access to this subject and section.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+            <Button
+              variant="destructive"
+              onClick={handleRemoveExistingAssignmentConfirm}
+              disabled={removeAssignmentSubmitting}
+            >
+              {removeAssignmentSubmitting ? 'Removing...' : 'Remove'}
             </Button>
           </DialogFooter>
         </DialogContent>

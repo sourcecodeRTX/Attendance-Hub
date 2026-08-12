@@ -16,7 +16,8 @@ import {
 } from '@/lib/db/attendance';
 import { getActiveStudents } from '@/lib/db/students';
 import { getSubjects, getSubjectById } from '@/lib/db/subjects';
-import { getUserSections, getUserSubjects } from '@/lib/db/user-sections';
+import { getUserSubjects, getPrimarySectionId } from '@/lib/db/user-sections';
+import { getSections } from '@/lib/db/university';
 import { logActivity } from '@/lib/db/activity';
 
 import type {
@@ -39,6 +40,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectGroup,
+  SelectLabel,
 } from '@/components/ui/select';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import {
@@ -103,6 +106,13 @@ interface StudentRow {
 // Page component
 // ---------------------------------------------------------------------------
 
+type DropdownSubject = {
+  subject: Subject;
+  sectionId: string;
+  sectionName: string;
+  type: 'primary' | 'regular';
+};
+
 export default function AttendancePage() {
   const { user, university } = useAuthStore();
   const { sortOrder, sortDirection, setSortOrder, setSortDirection } = usePreferencesStore();
@@ -115,12 +125,13 @@ export default function AttendancePage() {
   }, [setSortDirection]);
 
   // ---- data ----
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [dropdownSubjects, setDropdownSubjects] = useState<DropdownSubject[]>([]);
+  const [selectedDropdownValue, setSelectedDropdownValue] = useState<string>(''); // format: "subjectId|sectionId"
+  
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
   const [students, setStudents] = useState<Student[]>([]);
   const [todaySessions, setTodaySessions] = useState<AttendanceSession[]>([]);
-  const [userSectionId, setUserSectionId] = useState<string>(''); // User's assigned section
-  const [userSubjectAssignments, setUserSubjectAssignments] = useState<UserSubject[]>([]); // For regular teachers
+  const [userSectionId, setUserSectionId] = useState<string>(''); // Used for primary teachers OR derived from selection
 
   // ---- session editing ----
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -176,49 +187,70 @@ export default function AttendancePage() {
   // =========================================================================
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !university) return;
 
     let cancelled = false;
 
     async function loadSubjects() {
       setIsLoading(true);
       try {
-        if (user!.role === 'primary_teacher' || user!.role === 'cr') {
-          const sections = await getUserSections(user!.id);
-          console.log('[Attendance] User sections:', sections);
-          if (sections.length > 0) {
-            const sectionId = sections[0].sectionId;
-            if (!cancelled) setUserSectionId(sectionId); // Store user's section ID
-            const subs = await getSubjects(sectionId);
-            console.log('[Attendance] Subjects for section:', subs);
-            if (!cancelled) setSubjects(subs);
-          } else {
-            console.warn('[Attendance] No sections found for user');
-            toast.error('No section assigned. Please contact admin.');
+        // Pull latest data from Supabase (don't let failure block local load)
+        try {
+          await pullFromCloud(university!.id);
+        } catch (pullErr) {
+          console.warn('Cloud pull failed, using local data:', pullErr);
+        }
+
+        const allSections = await getSections(university!.id);
+        const sectionMap = new Map(allSections.map(s => [s.id, s.name]));
+        
+        let newDropdownSubjects: DropdownSubject[] = [];
+
+        if (user!.role === 'primary_teacher' || user!.role === 'cr' || user!.role === 'regular_teacher') {
+          // 1. Fetch Primary Section Subjects (if they are a primary teacher or CR)
+          const primarySectionId = await getPrimarySectionId(user!.id);
+          if (primarySectionId) {
+            const primarySubs = await getSubjects(primarySectionId);
+            const sectionName = sectionMap.get(primarySectionId) || 'Unknown Section';
+            newDropdownSubjects = primarySubs.map(subject => ({
+              subject,
+              sectionId: primarySectionId,
+              sectionName,
+              type: 'primary'
+            }));
           }
-        } else if (user!.role === 'regular_teacher') {
+
+          // 2. Fetch Assigned Subjects (regular teacher assignments, which primary teachers can ALSO have)
           const userSubs = await getUserSubjects(user!.id);
-          console.log('[Attendance] User subject assignments:', userSubs);
-          if (!cancelled) setUserSubjectAssignments(userSubs); // Store all assignments
-          
-          // Resolve unique subjects (teacher may teach same subject in multiple sections)
-          const subjectMap = new Map<string, Subject>();
           for (const us of userSubs) {
-            if (!subjectMap.has(us.subjectId)) {
-              const s = await getSubjectById(us.subjectId);
-              if (s) subjectMap.set(us.subjectId, s);
+            // Avoid adding duplicates (e.g., if already added from primary section)
+            const isDuplicate = newDropdownSubjects.some(
+              ds => ds.subject.id === us.subjectId && ds.sectionId === us.sectionId
+            );
+            if (!isDuplicate) {
+              const subject = await getSubjectById(us.subjectId);
+              if (subject) {
+                const sectionName = sectionMap.get(us.sectionId) || 'Unknown Section';
+                newDropdownSubjects.push({
+                  subject,
+                  sectionId: us.sectionId,
+                  sectionName,
+                  type: 'regular'
+                });
+              }
             }
           }
-          const resolved = Array.from(subjectMap.values());
-          console.log('[Attendance] Resolved subjects:', resolved);
-          if (!cancelled) setSubjects(resolved);
-          if (resolved.length === 0) {
-            toast.error('No subjects assigned. Please contact admin.');
+
+          if (!cancelled) {
+            setDropdownSubjects(newDropdownSubjects);
+            if (newDropdownSubjects.length === 0) {
+              toast.error('No subjects assigned. Please contact admin.');
+            }
           }
         }
       } catch (err) {
         console.error('Failed to load subjects:', err);
-        toast.error('Failed to load subjects');
+        if (!cancelled) toast.error('Failed to load subjects');
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -228,28 +260,14 @@ export default function AttendancePage() {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, university]);
 
   useEffect(() => {
-    if (!selectedSubjectId) return;
+    if (!selectedSubjectId || !userSectionId) return;
     if (!user) return;
 
-    const subject = subjects.find((s) => s.id === selectedSubjectId);
-    if (!subject) return;
-
-    // Determine the section ID to use
-    let effectiveSectionId = '';
-    
-    if (user.role === 'primary_teacher' || user.role === 'cr') {
-      // Primary teachers use their assigned section
-      effectiveSectionId = userSectionId;
-    } else if (user.role === 'regular_teacher') {
-      // Regular teachers: find section from their subject assignments
-      const assignment = userSubjectAssignments.find(a => a.subjectId === selectedSubjectId);
-      if (assignment) {
-        effectiveSectionId = assignment.sectionId;
-      }
-    }
+    // Use the explicitly selected section ID
+    const effectiveSectionId = userSectionId;
     
     if (!effectiveSectionId) {
       console.warn('[Attendance] No section found for subject:', selectedSubjectId);
@@ -263,11 +281,6 @@ export default function AttendancePage() {
       try {
         const sid = effectiveSectionId;
         console.log('[Attendance] Loading data for section:', sid);
-        
-        // Update userSectionId for regular teachers when they select a subject
-        if (user!.role === 'regular_teacher') {
-          setUserSectionId(sid);
-        }
 
         const [activeStudents, sessions, nextP, allSessions] =
           await Promise.all([
@@ -319,7 +332,7 @@ export default function AttendancePage() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedSubjectId, userSectionId, userSubjectAssignments, user, today, refreshKey]);
+  }, [selectedSubjectId, userSectionId, user, today, refreshKey]);
 
   useEffect(() => {
     if (!user || !university || !selectedSubjectId || !userSectionId) return;
@@ -478,7 +491,7 @@ export default function AttendancePage() {
     if (!user || !university || !selectedSubjectId || records.size === 0)
       return;
 
-    const subject = subjects.find((s) => s.id === selectedSubjectId);
+    const subject = dropdownSubjects.find((s) => s.subject.id === selectedSubjectId)?.subject;
     if (!subject) return;
 
     setIsSaving(true);
@@ -611,7 +624,7 @@ export default function AttendancePage() {
     user,
     university,
     selectedSubjectId,
-    subjects,
+    dropdownSubjects,
     records,
     isNewSession,
     activeSessionId,
@@ -619,6 +632,7 @@ export default function AttendancePage() {
     today,
     isTeacher,
     todaySessions,
+    userSectionId,
     playSound,
   ]);
 
@@ -777,10 +791,12 @@ export default function AttendancePage() {
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold">Mark Attendance</h1>
-        <p className="text-sm text-muted-foreground">
-          {formatDateLabel(today)} &middot; {subjects.length} subject
-          {subjects.length !== 1 ? 's' : ''} available
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-muted-foreground">
+            {formatDateLabel(today)} &middot; {dropdownSubjects.length} subject
+            {dropdownSubjects.length !== 1 ? 's' : ''} available
+          </p>
+        </div>
       </div>
 
       {/* Subject selector + date badge */}
@@ -792,26 +808,48 @@ export default function AttendancePage() {
                 Subject
               </label>
               <Select
-                value={selectedSubjectId}
-                onValueChange={(val: any) => {
+                value={selectedDropdownValue}
+                onValueChange={(val: string | null) => {
+                  if (!val) return;
                   if (hasUnsavedChanges) {
                     const ok = window.confirm(
                       'You have unsaved changes. Switch subject anyway?',
                     );
                     if (!ok) return;
                   }
-                  setSelectedSubjectId(val as string);
+                  setSelectedDropdownValue(val);
+                  const [subId, secId] = val.split('|');
+                  setSelectedSubjectId(subId);
+                  setUserSectionId(secId);
+                  setActiveSessionId(null);
+                  setIsNewSession(false);
+                  setViewingHistorySession(null);
                 }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select a subject" />
                 </SelectTrigger>
                 <SelectContent>
-                  {subjects.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.code} &mdash; {s.name}
-                    </SelectItem>
-                  ))}
+                  {dropdownSubjects.some(ds => ds.type === 'primary') && (
+                    <SelectGroup>
+                      <SelectLabel>Primary Section (Incharge)</SelectLabel>
+                      {dropdownSubjects.filter(ds => ds.type === 'primary').map((ds) => (
+                        <SelectItem key={`${ds.subject.id}|${ds.sectionId}`} value={`${ds.subject.id}|${ds.sectionId}`}>
+                          {ds.subject.code} &mdash; {ds.subject.name} ({ds.sectionName})
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
+                  {dropdownSubjects.some(ds => ds.type === 'regular') && (
+                    <SelectGroup>
+                      <SelectLabel>Other Assigned Subjects (Regular)</SelectLabel>
+                      {dropdownSubjects.filter(ds => ds.type === 'regular').map((ds) => (
+                        <SelectItem key={`${ds.subject.id}|${ds.sectionId}`} value={`${ds.subject.id}|${ds.sectionId}`}>
+                          {ds.subject.code} &mdash; {ds.subject.name} ({ds.sectionName})
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  )}
                 </SelectContent>
               </Select>
             </div>

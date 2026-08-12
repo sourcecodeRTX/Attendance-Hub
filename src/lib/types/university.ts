@@ -46,7 +46,7 @@ export interface Section {
   universityId: string;
   departmentId: string;
   branchId: string;
-  specialisationId: string;
+  specialisationId: string | null;
   name: string;
   primaryTeacherId: string | null;
   isActive: boolean;

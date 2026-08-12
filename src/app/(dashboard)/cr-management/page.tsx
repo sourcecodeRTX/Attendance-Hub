@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@/lib/stores/auth-store';
-import { getUserSections, createUserSection, deleteUserSectionsByUser } from '@/lib/db/user-sections';
+import { getUserSections, createUserSection, deleteUserSectionsByUser, getPrimarySectionId } from '@/lib/db/user-sections';
 import { logActivity } from '@/lib/db/activity';
 import { createManagedAuthUser } from '../actions';
 import { supabase } from '@/lib/supabase/client';
@@ -70,13 +70,11 @@ export default function CRManagementPage() {
 
     setLoading(true);
     try {
-      const userSecs = await getUserSections(user.id);
-      if (userSecs.length === 0) {
+      const sectionId = await getPrimarySectionId(user.id);
+      if (!sectionId) {
         setLoading(false);
         return;
       }
-
-      const sectionId = userSecs[0].sectionId;
       const sec = await db.sections.get(sectionId);
       if (sec) setSection(sec);
 

@@ -3,7 +3,7 @@ export interface Student {
   universityId: string;
   departmentId: string;
   branchId: string;
-  specialisationId: string;
+  specialisationId: string | null;
   sectionId: string;
   rollNumber: string;
   fullName: string;

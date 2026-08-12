@@ -71,6 +71,7 @@ const ACTION_TYPE_LABELS: Record<ActivityActionType, string> = {
   teacher_subjects_assigned: 'Teacher Subjects Assigned',
   teacher_subject_removed: 'Teacher Subject Removed',
   teacher_assigned: 'Teacher Assigned',
+  teacher_assignment_removed: 'Teacher Assignment Removed',
   regular_teacher_assigned: 'Regular Teacher Assigned',
   cr_assigned: 'CR Assigned',
   cr_deleted: 'CR Deleted',

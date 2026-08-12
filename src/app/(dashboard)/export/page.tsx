@@ -6,7 +6,7 @@ import { getDepartments, getSections, getBranches } from '@/lib/db/university';
 import { getStudents } from '@/lib/db/students';
 import { getSubjects } from '@/lib/db/subjects';
 import { getAttendanceSessions } from '@/lib/db/attendance';
-import { getUserSections } from '@/lib/db/user-sections';
+import { getUserSections, getPrimarySectionId } from '@/lib/db/user-sections';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -88,10 +88,8 @@ export default function ExportPage() {
           const deptBranches = await getBranches(university.id, user.departmentId);
           setBranches(deptBranches);
         } else if (isPrimaryTeacher) {
-          const userSections = await getUserSections(user.id);
-          const ptSectionIds = userSections
-            .filter((us) => us.userRole === 'primary_teacher')
-            .map((us) => us.sectionId);
+          const ptSectionId = await getPrimarySectionId(user.id);
+          const ptSectionIds = ptSectionId ? [ptSectionId] : [];
           setTeacherSectionIds(ptSectionIds);
           if (ptSectionIds.length > 0) {
             const allSections = await getSections(university.id);

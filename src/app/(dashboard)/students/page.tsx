@@ -10,7 +10,7 @@ import {
   updateStudent,
   softDeleteStudent,
 } from '@/lib/db/students';
-import { getUserSections } from '@/lib/db/user-sections';
+import { getUserSections, getUserSubjects, getPrimarySectionId } from '@/lib/db/user-sections';
 import { logActivity } from '@/lib/db/activity';
 import { db } from '@/lib/db/index';
 import { pullFromCloud } from '@/lib/db/sync';
@@ -70,7 +70,7 @@ export default function StudentsPage() {
 
   const [students, setStudents] = useState<Student[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
-  const [userSections, setUserSections] = useState<UserSection[]>([]);
+  const [teacherSectionIds, setTeacherSectionIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [studentSortMode, setStudentSortMode] = useState<'original' | 'roll_number' | 'name'>(effectiveSortOrder);
@@ -81,6 +81,7 @@ export default function StudentsPage() {
   const [addRoll, setAddRoll] = useState('');
   const [addName, setAddName] = useState('');
   const [addSubmitting, setAddSubmitting] = useState(false);
+  const [actionSectionId, setActionSectionId] = useState('');
 
   const [uploadOpen, setUploadOpen] = useState(false);
   const [csvData, setCsvData] = useState<{ rollNumber: string; fullName: string }[]>([]);
@@ -112,6 +113,13 @@ export default function StudentsPage() {
     if (!user || !university) return;
     setLoading(true);
     try {
+      // Pull latest data from Supabase (don't let failure block local load)
+      try {
+        await pullFromCloud(university.id);
+      } catch (pullErr) {
+        console.warn('Cloud pull failed, using local data:', pullErr);
+      }
+
       const allSections = await db.sections
         .where('universityId')
         .equals(university.id)
@@ -120,35 +128,34 @@ export default function StudentsPage() {
 
       let sectionIds: string[] = [];
 
-      if (user.role === 'primary_teacher') {
-        const us = await getUserSections(user.id);
-        setUserSections(us);
-        sectionIds = us.map((s) => s.sectionId);
-      } else if (user.role === 'admin') {
-        const deptSections = allSections.filter(
-          (s) => s.departmentId === user.departmentId
-        );
+      if (user.role === 'admin' || user.role === 'super_admin') {
+        const deptSections = allSections.filter((s) => s.departmentId === user.departmentId);
         sectionIds = deptSections.map((s) => s.id);
-      } else if (user.role === 'cr') {
-        const us = await getUserSections(user.id);
-        setUserSections(us);
-        sectionIds = us.map((s) => s.sectionId);
-      } else if (user.role === 'regular_teacher') {
-        const userSubjects = await db.userSubjects
-          .where('userId')
-          .equals(user.id)
-          .toArray();
-        sectionIds = [...new Set(userSubjects.map((us) => us.sectionId))];
+      } else {
+        // For primary_teacher, regular_teacher, and cr
+        const userSubjects = await getUserSubjects(user.id);
+        const regularSectionIds = userSubjects.map((us) => us.sectionId);
+        
+        // Check for primary section for all teacher types and CR
+        const primaryId = await getPrimarySectionId(user.id);
+        
+        sectionIds = [...new Set([...regularSectionIds, ...(primaryId ? [primaryId] : [])])];
       }
 
+      // Ensure no undefined or empty strings in sectionIds
+      const validSectionIds = sectionIds.filter(Boolean);
+      setTeacherSectionIds(validSectionIds);
+
       const allStudents: Student[] = [];
-      for (const sid of sectionIds) {
+      for (const sid of validSectionIds) {
         const s = await getStudents(sid);
         allStudents.push(...s);
       }
       setStudents(allStudents);
-    } catch (_err) {
-      toast.error('Failed to load students');
+    } catch (_err: any) {
+      console.error('Failed to load students:', _err);
+      const errorMessage = _err?.message || 'Unknown error';
+      toast.error(`Failed to load students: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -229,14 +236,20 @@ export default function StudentsPage() {
   };
 
   const primarySection = useMemo(() => {
-    if (!isPrimaryTeacher || !user) return null;
-    // First check user_sections table
-    if (userSections.length > 0) {
-      return sections.find((s) => s.id === userSections[0].sectionId) ?? null;
+    if (!user || (user.role !== 'primary_teacher' && user.role !== 'regular_teacher')) return null;
+    
+    // For primary and regular teachers, use the first section they are assigned to
+    if (teacherSectionIds.length > 0) {
+      return sections.find((s) => s.id === teacherSectionIds[0]) ?? null;
     }
-    // Fallback: check sections where this user is the primary_teacher_id
-    return sections.find((s) => s.primaryTeacherId === user.id) ?? null;
-  }, [isPrimaryTeacher, user, userSections, sections]);
+    
+    // Fallback for primary teachers
+    if (user.role === 'primary_teacher') {
+      return sections.find((s) => s.primaryTeacherId === user.id) ?? null;
+    }
+    
+    return null;
+  }, [user, teacherSectionIds, sections]);
 
   const adminSectionOptions = useMemo(() => {
     if (!isAdmin || !user?.departmentId) return [];
@@ -253,7 +266,9 @@ export default function StudentsPage() {
       toast.error('User or university not found');
       return;
     }
-    if (!primarySection) {
+    const targetId = actionSectionId || (teacherSectionIds.length > 0 ? teacherSectionIds[0] : '');
+    const section = sections.find((s) => s.id === targetId);
+    if (!section) {
       toast.error('No section assigned. Please contact admin.');
       return;
     }
@@ -266,10 +281,10 @@ export default function StudentsPage() {
       const student: Student = {
         id: crypto.randomUUID(),
         universityId: university.id,
-        departmentId: primarySection.departmentId,
-        branchId: primarySection.branchId,
-        specialisationId: primarySection.specialisationId,
-        sectionId: primarySection.id,
+        departmentId: section.departmentId,
+        branchId: section.branchId,
+        specialisationId: section.specialisationId,
+        sectionId: section.id,
         rollNumber: addRoll.trim(),
         fullName: addName.trim(),
         isActive: true,
@@ -279,13 +294,13 @@ export default function StudentsPage() {
       await createStudent(student, user.id);
       await logActivity({
         universityId: university.id,
-        departmentId: primarySection.departmentId,
+        departmentId: section.departmentId,
         actionType: 'student_edited',
         performedByRole: user.role,
         performedByName: user.fullName,
         performedById: user.id,
         targetName: student.fullName,
-        sectionName: primarySection.name,
+        sectionName: section.name,
       });
       toast.success('Student added');
       setAddOpen(false);
@@ -343,7 +358,9 @@ export default function StudentsPage() {
       toast.error('User or university not found');
       return;
     }
-    if (!primarySection) {
+    const targetId = actionSectionId || (teacherSectionIds.length > 0 ? teacherSectionIds[0] : '');
+    const section = sections.find((s) => s.id === targetId);
+    if (!section) {
       toast.error('No section assigned. Please contact admin.');
       return;
     }
@@ -357,10 +374,10 @@ export default function StudentsPage() {
       const newStudents: Student[] = csvData.map((row, index) => ({
         id: crypto.randomUUID(),
         universityId: university.id,
-        departmentId: primarySection.departmentId,
-        branchId: primarySection.branchId,
-        specialisationId: primarySection.specialisationId,
-        sectionId: primarySection.id,
+        departmentId: section.departmentId,
+        branchId: section.branchId,
+        specialisationId: section.specialisationId,
+        sectionId: section.id,
         rollNumber: row.rollNumber,
         fullName: row.fullName,
         isActive: true,
@@ -370,12 +387,12 @@ export default function StudentsPage() {
       await createStudentsBulk(newStudents, user.id);
       await logActivity({
         universityId: university.id,
-        departmentId: primarySection.departmentId,
+        departmentId: section.departmentId,
         actionType: 'students_uploaded',
         performedByRole: user.role,
         performedByName: user.fullName,
         performedById: user.id,
-        sectionName: primarySection.name,
+        sectionName: section.name,
         details: { count: newStudents.length },
       });
       toast.success(`${newStudents.length} students uploaded`);
@@ -749,6 +766,22 @@ export default function StudentsPage() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
+              <Label>Target Section</Label>
+              <Select 
+                value={actionSectionId || (teacherSectionIds.length > 0 ? teacherSectionIds[0] : '')} 
+                onValueChange={(val) => setActionSectionId(val || '')}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select section..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {sections.filter(s => teacherSectionIds.includes(s.id)).map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="add-roll">Roll Number</Label>
               <Input
                 id="add-roll"
@@ -796,36 +829,54 @@ export default function StudentsPage() {
             </DialogDescription>
           </DialogHeader>
 
-          {csvData.length === 0 ? (
-            <div
-              className={`flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors ${
-                isDragging
-                  ? 'border-primary bg-primary/5'
-                  : 'border-muted-foreground/25 hover:border-muted-foreground/50'
-              }`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="mb-2 size-8 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">
-                Drag and drop a CSV file here, or click to browse
-              </p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFileParse(file);
-                }}
-              />
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Target Section</Label>
+              <Select 
+                value={actionSectionId || (teacherSectionIds.length > 0 ? teacherSectionIds[0] : '')} 
+                onValueChange={(val) => setActionSectionId(val || '')}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select section..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {sections.filter(s => teacherSectionIds.includes(s.id)).map(s => (
+                    <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
+            {csvData.length === 0 ? (
+              <div
+                className={`flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors ${
+                  isDragging
+                    ? 'border-primary bg-primary/5'
+                    : 'border-muted-foreground/25 hover:border-muted-foreground/50'
+                }`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="mb-2 size-8 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  Drag and drop a CSV file here, or click to browse
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileParse(file);
+                  }}
+                />
+              </div>
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -870,6 +921,7 @@ export default function StudentsPage() {
               </div>
             </div>
           )}
+          </div>
 
           <DialogFooter>
             <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>

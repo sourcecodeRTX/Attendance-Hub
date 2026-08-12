@@ -46,7 +46,8 @@ export const specialisationSchema = z.object({
 
 export const sectionSchema = z.object({
   name: z.string().min(1, 'Section name is required'),
-  specialisationId: z.string().uuid('Specialisation is required'),
+  branchId: z.string().uuid('Branch is required'),
+  specialisationId: z.string().uuid('Invalid specialisation ID').optional().or(z.literal('')),
 });
 
 export const teacherAccountSchema = z.object({

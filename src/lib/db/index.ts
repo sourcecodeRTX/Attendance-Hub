@@ -23,14 +23,14 @@ class AttTrackerDB extends Dexie {
 
   constructor() {
     super('AttTrackerDB');
-    this.version(10).stores({
+    this.version(11).stores({
       users:              'id, universityId, role, departmentId',
       students:           'id, universityId, departmentId, sectionId, rollNumber, isActive, uploadedBy',
       subjects:           'id, universityId, sectionId, [universityId+sectionId]',
       subjectSections:    'id, subjectId, sectionId, [subjectId+sectionId]',
       attendanceSessions: 'id, universityId, subjectId, sectionId, date, [subjectId+date], lockedByTeacher, isArchived',
       syncQueue:          '++id, universityId, ownerId, type, collection, createdAt',
-      sections:           'id, universityId, departmentId, [universityId+departmentId], branchId, isArchived',
+      sections:           'id, universityId, departmentId, [universityId+departmentId], branchId, isArchived, primaryTeacherId',
       userSections:       'id, universityId, userId, sectionId, [userId+sectionId]',
       userSubjects:       'id, universityId, userId, subjectId, sectionId, [subjectId+sectionId]',
       departments:        'id, universityId',
@@ -38,7 +38,7 @@ class AttTrackerDB extends Dexie {
       specialisations:    'id, universityId, branchId',
       cachedAnalytics:    'id, universityId',
     });
-    this.version(9).stores({
+    this.version(10).stores({
       users:              'id, universityId, role, departmentId',
       students:           'id, universityId, departmentId, sectionId, rollNumber, isActive, uploadedBy',
       subjects:           'id, universityId, sectionId',

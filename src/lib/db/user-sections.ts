@@ -10,6 +10,15 @@ export async function getSectionUsers(sectionId: string): Promise<UserSection[]>
   return db.userSections.where('sectionId').equals(sectionId).toArray();
 }
 
+export async function getPrimarySectionId(userId: string): Promise<string | null> {
+  const primarySections = await db.sections.where('primaryTeacherId').equals(userId).toArray();
+  if (primarySections.length > 0) return primarySections[0].id;
+  
+  const userSections = await getUserSections(userId);
+  if (userSections.length > 0) return userSections[0].sectionId;
+  return null;
+}
+
 export async function createUserSection(us: UserSection, currentUserId: string): Promise<void> {
   await db.userSections.put(us);
   await db.syncQueue.add({
@@ -67,27 +76,30 @@ export async function createUserSubject(us: UserSubject, currentUserId: string):
     .equals([us.subjectId, us.sectionId])
     .first();
   
-  if (!existing) {
-    await db.userSubjects.put(us);
-    await db.syncQueue.add({
-      universityId: us.universityId,
-      ownerId: currentUserId,
-      type: 'create',
-      collection: 'user_subjects',
-      docId: us.id,
-      data: {
-        id: us.id,
-        university_id: us.universityId,
-        user_id: us.userId,
-        subject_id: us.subjectId,
-        section_id: us.sectionId,
-        assigned_at: us.assignedAt,
-        assigned_by: us.assignedBy,
-      },
-      createdAt: new Date().toISOString(),
-      retryCount: 0,
-    });
+  if (existing) {
+    if (existing.userId === us.userId) return; // Already assigned to this user
+    throw new Error('This subject-section combination is already assigned to another teacher.');
   }
+
+  await db.userSubjects.put(us);
+  await db.syncQueue.add({
+    universityId: us.universityId,
+    ownerId: currentUserId,
+    type: 'create',
+    collection: 'user_subjects',
+    docId: us.id,
+    data: {
+      id: us.id,
+      university_id: us.universityId,
+      user_id: us.userId,
+      subject_id: us.subjectId,
+      section_id: us.sectionId,
+      assigned_at: us.assignedAt,
+      assigned_by: us.assignedBy,
+    },
+    createdAt: new Date().toISOString(),
+    retryCount: 0,
+  });
 }
 
 export async function deleteUserSubjectsByUser(userId: string, universityId: string, currentUserId: string): Promise<void> {
