@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { getUserSections, createUserSection, deleteUserSectionsByUser, getPrimarySectionId } from '@/lib/db/user-sections';
 import { logActivity } from '@/lib/db/activity';
-import { createManagedAuthUser } from '../actions';
+import { createManagedAuthUser, createManagedUserProfile } from '../actions';
 import { supabase } from '@/lib/supabase/client';
 import { db } from '@/lib/db/index';
 import type { User, Section, UserSection } from '@/lib/types';
@@ -146,28 +146,27 @@ export default function CRManagementPage() {
       };
 
       await db.users.put(newUser);
-      await db.syncQueue.add({
-        universityId: university.id,
-        ownerId: user.id,
-        type: 'create',
-        collection: 'users',
-        docId: newUserId,
-        data: {
-          id: newUserId,
-          university_id: university.id,
-          role: 'cr',
-          full_name: newUser.fullName,
-          staff_id: newUser.staffId,
-          email: newUser.email,
-          department_id: section.departmentId,
-          is_active: true,
-          must_change_password: true,
-          created_at: newUser.createdAt,
-          created_by: user.id,
-        },
-        createdAt: new Date().toISOString(),
-        retryCount: 0,
+
+      // Insert profile directly into Supabase so the CR can log in
+      // immediately (the sync queue is async and may not have run yet).
+      const profileResult = await createManagedUserProfile({
+        id: newUserId,
+        university_id: university.id,
+        role: 'cr',
+        full_name: newUser.fullName,
+        staff_id: newUser.staffId,
+        email: newUser.email,
+        department_id: section.departmentId,
+        is_active: true,
+        must_change_password: true,
+        created_at: newUser.createdAt,
+        created_by: user.id,
       });
+
+      if (!profileResult.success) {
+        console.error('Failed to push CR profile to Supabase:', profileResult.error);
+        // Don't block — the sync queue will eventually push it
+      }
 
       const userSection: UserSection = {
         id: crypto.randomUUID(),

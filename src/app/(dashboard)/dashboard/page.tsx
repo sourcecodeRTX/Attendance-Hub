@@ -589,6 +589,8 @@ function CRDashboard() {
   const { user, university } = useAuthStore();
   const [todayPresent, setTodayPresent] = useState(0);
   const [todayTotal, setTodayTotal] = useState(0);
+  const [todaySessions, setTodaySessions] = useState(0);
+  const [activeStudentCount, setActiveStudentCount] = useState(0);
   const [subjectSummary, setSubjectSummary] = useState<{ name: string; code: string; attendance: number }[]>([]);
   const [belowThreshold, setBelowThreshold] = useState<{ rollNumber: string; fullName: string; percentage: number }[]>([]);
 
@@ -617,6 +619,7 @@ function CRDashboard() {
       }
       setTodayPresent(tp);
       setTodayTotal(tt);
+      setTodaySessions(todaySess.length);
 
       // Subject-wise
       setSubjectSummary(
@@ -636,6 +639,7 @@ function CRDashboard() {
         }
         return { rollNumber: stu.rollNumber, fullName: stu.fullName, percentage: total === 0 ? 100 : Math.round((present / total) * 100) };
       });
+      setActiveStudentCount(active.length);
       setBelowThreshold(stats.filter((s) => s.percentage < threshold).sort((a, b) => a.percentage - b.percentage));
     })();
   }, [user, university]);
@@ -644,9 +648,10 @@ function CRDashboard() {
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard icon={<Users className="h-4 w-4" />} title="Today's Attendance" value={todayTotal > 0 ? `${todayPresent}/${todayTotal}` : '-'} />
-        <StatCard icon={<BarChart3 className="h-4 w-4" />} title="Today's %" value={todayTotal > 0 ? `${Math.round((todayPresent / todayTotal) * 100)}%` : '-'} />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard icon={<Users className="h-4 w-4" />} title="Total Students" value={belowThreshold.length > 0 ? belowThreshold.length + (activeStudentCount || 0) : activeStudentCount || 0} />
+        <StatCard icon={<Clock className="h-4 w-4" />} title="Today's Sessions" value={todaySessions} />
+        <StatCard icon={<BarChart3 className="h-4 w-4" />} title="Today's Attendance" value={todayTotal > 0 ? `${Math.round((todayPresent / todayTotal) * 100)}%` : '-'} />
         <StatCard icon={<AlertTriangle className="h-4 w-4" />} title="Below Threshold" value={belowThreshold.length} />
       </div>
 

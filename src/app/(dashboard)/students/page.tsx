@@ -10,12 +10,12 @@ import {
   updateStudent,
   softDeleteStudent,
 } from '@/lib/db/students';
-import { getUserSections, getUserSubjects, getPrimarySectionId } from '@/lib/db/user-sections';
+import { getUserSections } from '@/lib/db/user-sections';
 import { logActivity } from '@/lib/db/activity';
 import { db } from '@/lib/db/index';
 import { pullFromCloud } from '@/lib/db/sync';
 import { subscribeToStudents } from '@/lib/supabase/realtime';
-import type { Student, Section, UserSection } from '@/lib/types';
+import type { Student, Section } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -131,15 +131,20 @@ export default function StudentsPage() {
       if (user.role === 'admin' || user.role === 'super_admin') {
         const deptSections = allSections.filter((s) => s.departmentId === user.departmentId);
         sectionIds = deptSections.map((s) => s.id);
+      } else if (user.role === 'cr') {
+        // CR sees students from the section they are assigned to
+        const crSections = await getUserSections(user.id);
+        sectionIds = crSections
+          .filter((us) => us.userRole === 'cr')
+          .map((us) => us.sectionId);
       } else {
-        // For primary_teacher, regular_teacher, and cr
-        const userSubjects = await getUserSubjects(user.id);
-        const regularSectionIds = userSubjects.map((us) => us.sectionId);
-        
-        // Check for primary section for all teacher types and CR
-        const primaryId = await getPrimarySectionId(user.id);
-        
-        sectionIds = [...new Set([...regularSectionIds, ...(primaryId ? [primaryId] : [])])];
+        // For primary_teacher: only show students from sections where
+        // they are the primary teacher. Regular-teacher subject sections
+        // are handled separately on the Attendance page.
+        const primarySections = allSections.filter(
+          (s) => s.primaryTeacherId === user.id
+        );
+        sectionIds = primarySections.map((s) => s.id);
       }
 
       // Ensure no undefined or empty strings in sectionIds
