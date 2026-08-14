@@ -16,7 +16,7 @@ import {
 } from '@/lib/db/attendance';
 import { getActiveStudents } from '@/lib/db/students';
 import { getSubjects, getSubjectById } from '@/lib/db/subjects';
-import { getUserSubjects, getPrimarySectionId } from '@/lib/db/user-sections';
+import { getUserSubjects, getPrimarySectionId, getSubjectTeachers } from '@/lib/db/user-sections';
 import { getSections } from '@/lib/db/university';
 import { logActivity } from '@/lib/db/activity';
 
@@ -132,6 +132,7 @@ export default function AttendancePage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [todaySessions, setTodaySessions] = useState<AttendanceSession[]>([]);
   const [userSectionId, setUserSectionId] = useState<string>(''); // Used for primary teachers OR derived from selection
+  const [assignedRegularTeacherId, setAssignedRegularTeacherId] = useState<string | null>(null);
 
   // ---- session editing ----
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -176,9 +177,17 @@ export default function AttendancePage() {
       if (isCR && viewingHistorySession.lockedByTeacher) return true;
       if (viewingHistorySession.date !== today) return true;
     }
+
+    // Restrict primary teachers from editing regular teacher subjects
+    if (user?.role === 'primary_teacher') {
+      if (assignedRegularTeacherId && assignedRegularTeacherId !== user.id) {
+        return true;
+      }
+    }
+
     if (!activeSession) return false;
     return !!(isCR && activeSession.lockedByTeacher);
-  }, [activeSession, isCR, viewingHistorySession, today]);
+  }, [activeSession, isCR, viewingHistorySession, today, user, assignedRegularTeacherId]);
 
   const showMarkingUI = isNewSession || activeSessionId !== null;
 
@@ -282,22 +291,22 @@ export default function AttendancePage() {
         const sid = effectiveSectionId;
         console.log('[Attendance] Loading data for section:', sid);
 
-        const [activeStudents, sessions, nextP, allSessions] =
+        const [activeStudents, sessions, nextP, allSessions, teachers] =
           await Promise.all([
             getActiveStudents(sid),
             getSessionsBySubjectAndDate(selectedSubjectId, today),
             getNextPeriodNumber(selectedSubjectId, today),
             getAttendanceSessions(sid),
+            getSubjectTeachers(selectedSubjectId),
           ]);
-
-        console.log('[Attendance] Active students:', activeStudents.length);
 
         if (cancelled) return;
 
+        const assignedTeacher = teachers.find(t => t.sectionId === sid);
+        setAssignedRegularTeacherId(assignedTeacher?.userId ?? null);
+
         setStudents(activeStudents);
-        setTodaySessions(
-          sessions.sort((a, b) => a.periodNumber - b.periodNumber),
-        );
+        setTodaySessions(sessions.sort((a, b) => a.periodNumber - b.periodNumber));
         setNextPeriod(nextP);
 
         const history = allSessions
