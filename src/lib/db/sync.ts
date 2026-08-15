@@ -54,8 +54,11 @@ export async function processSyncQueue(): Promise<void> {
         }
         case 'bulk_create': {
           const payload = item.data as unknown[];
-          const { error } = await supabase.from(item.collection).upsert(payload as any);
-          if (error) throw error;
+          // Import the action dynamically to avoid SSR issues if sync is called differently,
+          // or just import it at the top of the file. Actually, importing at the top is fine.
+          const { adminBulkUpsert } = await import('@/app/(dashboard)/backup/actions');
+          const result = await adminBulkUpsert(item.collection, payload, item.universityId, item.ownerId);
+          if (!result.success) throw new Error(result.error);
           break;
         }
         case 'update': {

@@ -11,6 +11,7 @@ import {
   FileBarChart,
   Settings,
   Activity,
+  DatabaseBackup,
 } from 'lucide-react';
 import type { UserRole } from '@/lib/types';
 import type { LucideIcon } from 'lucide-react';
@@ -27,6 +28,7 @@ export const NAV_ITEMS: Record<UserRole, NavItem[]> = {
     { label: 'Departments', href: '/departments', icon: Building2 },
     { label: 'Activity Logs', href: '/activity-logs', icon: Activity },
     { label: 'Export', href: '/export', icon: FileBarChart },
+    { label: 'Data Backup', href: '/backup', icon: DatabaseBackup },
     { label: 'Settings', href: '/settings', icon: Settings },
   ],
   admin: [
