@@ -878,7 +878,7 @@ export default function AttendancePage() {
           }
         >
           <TabsList className="mb-4">
-            <TabsTrigger value="today">Today's Sessions</TabsTrigger>
+            <TabsTrigger value="today">Today&apos;s Sessions</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
 

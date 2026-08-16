@@ -223,7 +223,7 @@ export async function restoreUniversityData(
     data.attendanceSessions = filterByUni(data.attendanceSessions);
 
     // 2. Deduplicate users from backup payload first
-    let rawUsers = settings.users || [];
+    const rawUsers = settings.users || [];
     const uniqueUsersMap = new Map();
     const safeUsersToRestore = [];
     const duplicateIdMapping: Record<string, string> = {};
