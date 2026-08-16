@@ -159,12 +159,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           ]);
 
           const elapsedMs = Date.now() - startedAt;
-          if (elapsedMs > 4000) {
-            console.warn('[AuthProvider] Slow profile load', {
-              uid,
-              elapsedMs,
-            });
-          }
 
           return true;
         } catch (error) {

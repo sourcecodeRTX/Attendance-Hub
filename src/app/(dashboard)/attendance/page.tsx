@@ -43,7 +43,7 @@ import {
   SelectGroup,
   SelectLabel,
 } from '@/components/ui/select';
-import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Dialog,
   DialogContent,
@@ -289,7 +289,6 @@ export default function AttendancePage() {
       setIsLoadingSessions(true);
       try {
         const sid = effectiveSectionId;
-        console.log('[Attendance] Loading data for section:', sid);
 
         const [activeStudents, sessions, nextP, allSessions, teachers] =
           await Promise.all([
@@ -878,6 +877,10 @@ export default function AttendancePage() {
             setAttendanceView(value as 'today' | 'history')
           }
         >
+          <TabsList className="mb-4">
+            <TabsTrigger value="today">Today's Sessions</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+          </TabsList>
 
           {/* ============================================================= */}
           {/* TODAY TAB                                                       */}
@@ -893,22 +896,7 @@ export default function AttendancePage() {
                 <Card>
                   <CardContent className="pt-4">
                     <div className="flex flex-wrap items-center gap-2">
-                      <div className="w-full sm:w-44">
-                        <Select
-                          value={attendanceView}
-                          onValueChange={(value) =>
-                            setAttendanceView(value as 'today' | 'history')
-                          }
-                        >
-                          <SelectTrigger className="h-9 w-full">
-                            <SelectValue placeholder="View" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="today">Today</SelectItem>
-                            <SelectItem value="history">History</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+
                       <span className="mr-1 text-sm font-medium text-muted-foreground">
                         Sessions:
                       </span>
@@ -1466,6 +1454,7 @@ function HistoryRecordList({
       const student = studentMap.get(r.studentId);
       return {
         record: r,
+        student: student,
         rollNumber: student?.rollNumber ?? r.rollNumber,
         fullName: student?.fullName ?? 'Unknown Student',
       };
@@ -1475,6 +1464,13 @@ function HistoryRecordList({
       list.sort((a, b) => a.fullName.localeCompare(b.fullName));
     } else if (sortOrder === 'roll_number') {
       list.sort((a, b) => a.rollNumber.localeCompare(b.rollNumber));
+    } else {
+      list.sort((a, b) => {
+        const timeDiff = (a.student?.uploadedAt ?? '').localeCompare(b.student?.uploadedAt ?? '');
+        return timeDiff !== 0
+          ? timeDiff
+          : a.rollNumber.localeCompare(b.rollNumber);
+      });
     }
 
     if (sortDirection === 'desc') {
