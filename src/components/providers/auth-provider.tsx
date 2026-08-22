@@ -35,7 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    const loadUserProfile = async (uid: string, email?: string): Promise<boolean> => {
+    const loadUserProfile = async (uid: string): Promise<boolean> => {
       if (loadingProfilePromiseRef.current) {
         return loadingProfilePromiseRef.current;
       }
@@ -77,10 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           let userProfile = initial.data;
 
           if (!userProfile) {
-            const result = await completeOrphanedProfile({
-              userId: uid,
-              email: email || '',
-            });
+            const result = await completeOrphanedProfile();
 
             if (!result.success) {
               if (result.needsRegistration) {
@@ -192,7 +189,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setLoading(true);
       try {
-        const loaded = await loadUserProfile(session.user.id, session.user.email);
+        const loaded = await loadUserProfile(session.user.id);
         if (!loaded) {
           await invalidateBrokenSession();
         }
@@ -254,7 +251,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             setLoading(true);
             try {
-              const loaded = await loadUserProfile(session.user.id, session.user.email);
+              const loaded = await loadUserProfile(session.user.id);
               if (!loaded) {
                 await invalidateBrokenSession();
               }
@@ -278,7 +275,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (session?.user) {
           setLoading(true);
-          const loaded = await loadUserProfile(session.user.id, session.user.email);
+          const loaded = await loadUserProfile(session.user.id);
           if (!loaded) {
             await invalidateBrokenSession();
           }

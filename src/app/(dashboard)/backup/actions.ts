@@ -1,9 +1,42 @@
 'use server';
 
+import { randomBytes } from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireUniversitySuperAdmin } from '@/lib/supabase/server-auth';
 
-export async function wipeUniversityData(universityId: string, currentUserId: string): Promise<{ success: boolean; error?: string }> {
+// Tables a bulk upsert is allowed to touch. Anything else is rejected
+// instead of being passed to the service-role client as an arbitrary
+// table name.
+const ALLOWED_BULK_COLLECTIONS = new Set([
+  'departments',
+  'branches',
+  'specialisations',
+  'sections',
+  'users',
+  'students',
+  'subjects',
+  'subject_sections',
+  'user_sections',
+  'user_subjects',
+  'attendance_sessions',
+]);
+
+interface RestoredCredential {
+  email: string;
+  fullName: string;
+  temporaryPassword: string;
+}
+
+function generateOneTimePassword(): string {
+  return randomBytes(12).toString('base64url');
+}
+
+export async function wipeUniversityData(universityId: string): Promise<{ success: boolean; error?: string }> {
   try {
+    const guard = await requireUniversitySuperAdmin(universityId);
+    if (!guard.ok) throw new Error(guard.error);
+    const currentUserId = guard.userId;
+
     const adminClient = createAdminClient();
 
     const { error: attErr } = await adminClient.from('attendance_sessions').delete().eq('university_id', universityId);
@@ -61,43 +94,44 @@ export async function wipeUniversityData(universityId: string, currentUserId: st
   }
 }
 
-export async function restoreAuthUsers(users: any[], universityId: string, currentUserId: string): Promise<{ success: boolean; error?: string; idMapping?: Record<string, string> }> {
+// Internal helper for restoreUniversityData — intentionally NOT exported so it
+// is not reachable as a public server action.
+async function restoreAuthUsers(
+  users: any[],
+  universityId: string,
+  currentUserId: string
+): Promise<{
+  success: boolean;
+  error?: string;
+  idMapping?: Record<string, string>;
+  createdUserIds?: string[];
+  credentials?: RestoredCredential[];
+}> {
   try {
     const adminClient = createAdminClient();
     const idMapping: Record<string, string> = {};
+    const createdUserIds: string[] = [];
+    const credentials: RestoredCredential[] = [];
 
-    let allExistingUsers: any[] = [];
-    let page = 1;
-    let hasMore = true;
-    while (hasMore) {
-      const { data: userPage, error } = await adminClient.auth.admin.listUsers({ page, perPage: 1000 });
-      if (error) {
-        console.error('Failed to list users for mapping:', error);
-        break;
-      }
-      if (userPage && userPage.users.length > 0) {
-        allExistingUsers = allExistingUsers.concat(userPage.users);
-        page++;
-      } else {
-        hasMore = false;
-      }
-    }
-
-    // Fallback: fetch existing users from public.users for this university
-    const { data: existingPublicUsers } = await adminClient
+    // Only match against profiles that already belong to THIS university.
+    // Never match against auth users project-wide — that would silently
+    // remap identities across universities.
+    const { data: existingPublicUsers, error: fetchError } = await adminClient
       .from('users')
-      .select('id, email')
+      .select('id, email, staff_id')
       .eq('university_id', universityId);
+    if (fetchError) {
+      throw new Error(`Failed to look up existing users: ${fetchError.message}`);
+    }
 
     for (const u of users) {
       if (u.role === 'super_admin') continue;
-      
-      let existing = allExistingUsers.find(x => x.email === u.email);
-      if (!existing && existingPublicUsers) {
-        existing = existingPublicUsers.find((x: any) => x.email === u.email);
-      }
-      if (!existing && existingPublicUsers && u.staffId) {
-        existing = existingPublicUsers.find((x: any) => x.staff_id === u.staffId);
+
+      let existing = existingPublicUsers?.find(
+        (x: any) => x.email && u.email && x.email.toLowerCase() === String(u.email).toLowerCase()
+      );
+      if (!existing && u.staffId) {
+        existing = existingPublicUsers?.find((x: any) => x.staff_id && x.staff_id === u.staffId);
       }
 
       if (existing) {
@@ -111,44 +145,51 @@ export async function restoreAuthUsers(users: any[], universityId: string, curre
         continue;
       }
 
-      // Try to create the user
+      const temporaryPassword = generateOneTimePassword();
       const { data, error } = await adminClient.auth.admin.createUser({
         email: u.email,
-        password: 'Password123!',
+        password: temporaryPassword,
         email_confirm: true,
         user_metadata: { role: u.role }
       });
-      
-      if (data?.user) {
-        if (data.user.id !== u.id) {
-          idMapping[u.id] = data.user.id;
-          u.id = data.user.id;
-        }
-      } else if (error) {
-        throw new Error(`Failed to create auth user ${u.email}: ${error.message}`);
+
+      if (!data?.user) {
+        throw new Error(`Failed to create auth user ${u.email}: ${error?.message}`);
       }
+
+      if (data.user.id !== u.id) {
+        idMapping[u.id] = data.user.id;
+        u.id = data.user.id;
+      }
+      createdUserIds.push(data.user.id);
+      credentials.push({
+        email: u.email,
+        fullName: u.fullName || u.email,
+        temporaryPassword,
+      });
     }
-    return { success: true, idMapping };
+    return { success: true, idMapping, createdUserIds, credentials };
   } catch (error: any) {
     console.error('Failed to restore auth users:', error);
     return { success: false, error: error.message };
   }
 }
 
-export async function adminBulkUpsert(collection: string, payload: any[], universityId: string, currentUserId: string): Promise<{ success: boolean; error?: string }> {
+export async function adminBulkUpsert(collection: string, payload: any[], universityId: string): Promise<{ success: boolean; error?: string }> {
   try {
-    const adminClient = createAdminClient();
-    
-    // Verify permissions
-    const { data: user } = await adminClient.from('users').select('role, university_id').eq('id', currentUserId).maybeSingle();
-    if (!user || user.role !== 'super_admin' || user.university_id !== universityId) {
-      throw new Error('Unauthorized');
+    if (!ALLOWED_BULK_COLLECTIONS.has(collection)) {
+      throw new Error(`Invalid collection: ${collection}`);
     }
+
+    const guard = await requireUniversitySuperAdmin(universityId);
+    if (!guard.ok) throw new Error(guard.error);
+
+    const adminClient = createAdminClient();
 
     // Force university_id on all payload items for security, except for tables that don't use it directly
     // subject_sections doesn't have university_id.
     const tablesWithoutUniId = ['subject_sections'];
-    
+
     const safePayload = payload.map(item => {
       if (tablesWithoutUniId.includes(collection)) {
         return item;
@@ -168,25 +209,22 @@ export async function adminBulkUpsert(collection: string, payload: any[], univer
 
 export async function restoreUniversityData(
   universityId: string,
-  currentUserId: string,
   settings: any,
   data: any
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; credentials?: RestoredCredential[] }> {
   try {
-    const adminClient = createAdminClient();
+    const guard = await requireUniversitySuperAdmin(universityId);
+    if (!guard.ok) throw new Error(guard.error);
+    const currentUserId = guard.userId;
 
-    // Verify permissions
-    const { data: user } = await adminClient.from('users').select('role, university_id').eq('id', currentUserId).maybeSingle();
-    if (!user || user.role !== 'super_admin' || user.university_id !== universityId) {
-      throw new Error('Unauthorized');
-    }
+    const adminClient = createAdminClient();
 
     const filterByUni = (arr: any[]) => {
       return (arr || []).filter(item => !item.universityId || item.universityId === universityId);
     };
 
     settings.users = filterByUni(settings.users);
-    
+
     // Deduplicate departments by code to prevent React duplicate key warnings
     // Check for duplicate departments by code
     const uniqueDeptsMap = new Map();
@@ -197,7 +235,7 @@ export async function restoreUniversityData(
       uniqueDeptsMap.set(d.code, d);
     }
     settings.departments = Array.from(uniqueDeptsMap.values());
-    
+
     settings.branches = filterByUni(settings.branches);
     settings.specialisations = filterByUni(settings.specialisations);
     settings.sections = filterByUni(settings.sections);
@@ -213,11 +251,11 @@ export async function restoreUniversityData(
       uniqueStudentsMap.set(key, s);
     }
     data.students = Array.from(uniqueStudentsMap.values());
-    
+
     // subject_sections don't have universityId, so filter them based on valid subjectIds
     const validSubjectIds = new Set(settings.subjects.map((s: any) => s.id));
     data.subjectSections = (data.subjectSections || []).filter((ss: any) => validSubjectIds.has(ss.subjectId));
-    
+
     data.userSections = filterByUni(data.userSections);
     data.userSubjects = filterByUni(data.userSubjects);
     data.attendanceSessions = filterByUni(data.attendanceSessions);
@@ -227,7 +265,7 @@ export async function restoreUniversityData(
     const uniqueUsersMap = new Map();
     const safeUsersToRestore = [];
     const duplicateIdMapping: Record<string, string> = {};
-    
+
     for (const u of rawUsers) {
       const key = u.staffId || u.email;
       if (key && uniqueUsersMap.has(key)) {
@@ -247,7 +285,7 @@ export async function restoreUniversityData(
     }
 
     const mapping: Record<string, string> = { ...(restoreRes.idMapping || {}) };
-    
+
     // Resolve duplicates so relations point to the kept user
     for (const [dupId, keptId] of Object.entries(duplicateIdMapping)) {
        mapping[dupId] = mapping[keptId] || keptId;
@@ -345,7 +383,12 @@ export async function restoreUniversityData(
     for (const u of mappedUsers) {
       if (u.id) uniqueMappedUsers.set(u.id, u);
     }
-    const finalMappedUsers = Array.from(uniqueMappedUsers.values());
+    // Accounts freshly created by this restore received a random one-time
+    // password nobody knows; force a password change at first login.
+    const createdIdSet = new Set(restoreRes.createdUserIds || []);
+    const finalMappedUsers = Array.from(uniqueMappedUsers.values()).map(u =>
+      createdIdSet.has(u.id) ? { ...u, must_change_password: true } : u
+    );
 
     // Break circular dependency: Users <-> Departments
     // Step 1: Upsert users with department_id = NULL
@@ -365,19 +408,19 @@ export async function restoreUniversityData(
     // Continue with other tables in safe dependency order
     await doUpsert('branches', mappedBranches);
     await doUpsert('specialisations', mappedSpecialisations);
-    
+
     // Sections have primary_teacher_id which relies on users
     await doUpsert('sections', mappedSections);
     await doUpsert('subjects', mappedSubjects);
     await doUpsert('students', mappedStudents);
-    
+
     // Many-to-many junction tables and attendance
     await doUpsert('subject_sections', mappedSubjectSections, true);
     await doUpsert('user_sections', mappedUserSections);
     await doUpsert('user_subjects', mappedUserSubjects);
     await doUpsert('attendance_sessions', mappedAttendance);
 
-    return { success: true };
+    return { success: true, credentials: restoreRes.credentials || [] };
   } catch (error: any) {
     console.error('restoreUniversityData failed:', error);
     return { success: false, error: error.message };

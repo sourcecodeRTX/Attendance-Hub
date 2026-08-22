@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { db } from '@/lib/db';
 import { clearSyncQueue } from '@/lib/db/sync';
-import { wipeUniversityData, restoreAuthUsers, restoreUniversityData } from './actions';
+import { wipeUniversityData, restoreUniversityData } from './actions';
 import {
   Card,
   CardContent,
@@ -34,6 +34,7 @@ export default function BackupPage() {
   const [hasDownloadedBackup, setHasDownloadedBackup] = useState(false);
   const [settingsFile, setSettingsFile] = useState<File | null>(null);
   const [dataFile, setDataFile] = useState<File | null>(null);
+  const [restoredCredentials, setRestoredCredentials] = useState<Array<{ email: string; fullName: string; temporaryPassword: string }>>([]);
 
   const isSuperAdmin = user?.role === 'super_admin';
   if (!isSuperAdmin) {
@@ -106,7 +107,7 @@ export default function BackupPage() {
     setIsWiping(true);
     try {
       // 1. Wipe remote data via server action
-      const res = await wipeUniversityData(university.id, user.id);
+      const res = await wipeUniversityData(university.id);
       if (!res.success) {
         throw new Error(res.error || 'Failed to wipe remote data');
       }
@@ -145,6 +146,7 @@ export default function BackupPage() {
     }
 
     setIsImporting(true);
+    setRestoredCredentials([]);
     try {
       // 1. Read files securely
       const settingsStr = await settingsFile.text();
@@ -165,9 +167,12 @@ export default function BackupPage() {
       }
 
       // 4. Restore data to the server directly
-      const restoreRes = await restoreUniversityData(university?.id || '', user?.id || '', settings, data);
+      const restoreRes = await restoreUniversityData(university?.id || '', settings, data);
       if (!restoreRes.success) {
         throw new Error(restoreRes.error || 'Failed to restore data to the server');
+      }
+      if (restoreRes.credentials && restoreRes.credentials.length > 0) {
+        setRestoredCredentials(restoreRes.credentials);
       }
 
       // 5. Update local Dexie database to match the new server state
@@ -298,6 +303,27 @@ export default function BackupPage() {
           </CardFooter>
         </Card>
       </div>
+
+      {/* One-time credentials for accounts freshly created by a restore */}
+      {restoredCredentials.length > 0 && (
+        <Alert className="border-amber-500/50 bg-amber-500/5 mt-6">
+          <AlertTriangle className="size-4" />
+          <AlertTitle>One-time passwords for restored accounts</AlertTitle>
+          <AlertDescription>
+            <p className="mb-2">
+              The following accounts were created during the restore. Share each one-time password
+              with its owner securely — they will be required to change it at first login.
+            </p>
+            <ul className="space-y-1 font-mono text-xs">
+              {restoredCredentials.map((c) => (
+                <li key={c.email}>
+                  {c.fullName} ({c.email}): <strong>{c.temporaryPassword}</strong>
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Danger Zone */}
       <Card className="border-destructive/50 mt-8">

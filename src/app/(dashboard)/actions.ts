@@ -1,6 +1,8 @@
 'use server';
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { getVerifiedCaller } from '@/lib/supabase/server-auth';
+import type { UserRole } from '@/lib/types';
 
 interface CreateManagedAuthUserInput {
   email: string;
@@ -13,9 +15,19 @@ interface CreateManagedAuthUserResult {
   error?: string;
 }
 
+// Roles allowed to mint managed auth accounts. Mirrors the routes that
+// legitimately call this action: /departments (super_admin), /teachers
+// (admin), /cr-management (primary_teacher).
+const MANAGED_AUTH_CALLER_ROLES: UserRole[] = ['super_admin', 'admin', 'primary_teacher'];
+
 export async function createManagedAuthUser(
   input: CreateManagedAuthUserInput
 ): Promise<CreateManagedAuthUserResult> {
+  const caller = await getVerifiedCaller();
+  if (!caller || !MANAGED_AUTH_CALLER_ROLES.includes(caller.role as UserRole)) {
+    return { success: false, error: 'Insufficient permissions.' };
+  }
+
   const adminClient = createAdminClient();
 
   const { data, error } = await adminClient.auth.admin.createUser({
@@ -50,9 +62,30 @@ interface CreateManagedUserProfileInput {
   created_by: string;
 }
 
+// A caller may only create profiles strictly below their own privilege
+// level; nobody can mint a super_admin through this action.
+const CREATABLE_PROFILE_ROLES: Record<string, UserRole[]> = {
+  super_admin: ['admin', 'primary_teacher', 'regular_teacher', 'cr'],
+  admin: ['primary_teacher', 'regular_teacher', 'cr'],
+  primary_teacher: ['cr'],
+};
+
 export async function createManagedUserProfile(
   input: CreateManagedUserProfileInput
 ): Promise<{ success: boolean; error?: string }> {
+  const caller = await getVerifiedCaller();
+  if (!caller) {
+    return { success: false, error: 'Insufficient permissions.' };
+  }
+  const creatable = CREATABLE_PROFILE_ROLES[caller.role];
+  if (
+    !creatable ||
+    caller.universityId !== input.university_id ||
+    !creatable.includes(input.role as UserRole)
+  ) {
+    return { success: false, error: 'Insufficient permissions.' };
+  }
+
   const adminClient = createAdminClient();
 
   const { error } = await adminClient.from('users').upsert({
@@ -66,7 +99,7 @@ export async function createManagedUserProfile(
     is_active: input.is_active,
     must_change_password: input.must_change_password,
     created_at: input.created_at,
-    created_by: input.created_by,
+    created_by: caller.userId,
   });
 
   if (error) {
@@ -79,7 +112,31 @@ export async function createManagedUserProfile(
 export async function deactivateManagedAuthUser(
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
+  const caller = await getVerifiedCaller();
+  if (!caller || (caller.role !== 'super_admin' && caller.role !== 'admin')) {
+    return { success: false, error: 'Insufficient permissions.' };
+  }
+
   const adminClient = createAdminClient();
+
+  const { data: target } = await adminClient
+    .from('users')
+    .select('id, role, university_id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (!target || target.university_id !== caller.universityId) {
+    return { success: false, error: 'Insufficient permissions.' };
+  }
+  if (target.id === caller.userId) {
+    return { success: false, error: 'Cannot deactivate your own account.' };
+  }
+  if (target.role === 'super_admin') {
+    return { success: false, error: 'Insufficient permissions.' };
+  }
+  if (caller.role === 'admin' && target.role === 'admin') {
+    return { success: false, error: 'Insufficient permissions.' };
+  }
 
   const { error } = await adminClient.auth.admin.updateUserById(userId, {
     ban_duration: '876000h',

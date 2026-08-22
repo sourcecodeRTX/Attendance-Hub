@@ -57,7 +57,7 @@ export async function processSyncQueue(): Promise<void> {
           // Import the action dynamically to avoid SSR issues if sync is called differently,
           // or just import it at the top of the file. Actually, importing at the top is fine.
           const { adminBulkUpsert } = await import('@/app/(dashboard)/backup/actions');
-          const result = await adminBulkUpsert(item.collection, payload, item.universityId, item.ownerId);
+          const result = await adminBulkUpsert(item.collection, payload, item.universityId);
           if (!result.success) throw new Error(result.error);
           break;
         }
