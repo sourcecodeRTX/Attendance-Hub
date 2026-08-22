@@ -11,7 +11,7 @@ Source of truth for *how it's being fixed*: this file.
 | 1 | Paranoid Read-Only Audit | Complete | 2026-08-22 | 350c8fe |
 | 2 | Test-Harness Foundation (Vitest) | Complete | 2026-08-22 | 06b3aec |
 | 3 | Auth & Session Security | Complete | 2026-08-23 | 912f160 |
-| 4 | Supabase RLS & Database Security | Complete | 2026-08-23 | *(this commit)* |
+| 4 | Supabase RLS & Database Security | Complete | 2026-08-23 | 02365f2 |
 | 5 | Secrets & Config Hygiene | Not started | | |
 | 6 | Sync Engine Correctness (Dexie ↔ Supabase) | Not started | | |
 | 7 | Data Integrity & Write Concurrency | Not started | | |
