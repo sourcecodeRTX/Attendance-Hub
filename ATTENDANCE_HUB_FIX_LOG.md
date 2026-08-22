@@ -9,7 +9,7 @@ Source of truth for *how it's being fixed*: this file.
 |---|---|---|---|---|
 | 0 | Ground Truth Recon | Complete | 2026-08-22 | 2ea0eca |
 | 1 | Paranoid Read-Only Audit | Complete | 2026-08-22 | 350c8fe |
-| 2 | Test-Harness Foundation (Vitest) | Not started | | |
+| 2 | Test-Harness Foundation (Vitest) | Complete | 2026-08-22 | (see entry) |
 | 3 | Auth & Session Security | Not started | | |
 | 4 | Supabase RLS & Database Security | Not started | | |
 | 5 | Secrets & Config Hygiene | Not started | | |
@@ -83,3 +83,18 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Headline findings** (full detail in audit file): unauthenticated/under-authorized service-role server actions (F-001..F-003); users-table UPDATE self-promotion to super_admin via RLS (F-004); pullFromCloud silent 1000-row truncation + no delete propagation (F-005); missing SUPABASE_SERVICE_ROLE_KEY in env (F-006); hardcoded restore password + cross-tenant account hijack (F-007/F-008); sync poison pills & teacher bulk-upload never syncing (F-009).
 - **Verification gates**: N/A — no source code touched; lint/tsc/build baseline from Phase 0 remains authoritative for this commit.
 - **Notes for Phase 2+**: DB-level claims (F-004, F-015/F-016 constraint gap, F-025, F-026) were derived by migration tracing only (Docker absent) — reproduce with precisely-mocked supabase-js clients once Vitest lands. Finding-to-Phase Map to be filled at Phase 3 start.
+
+### [PHASE 2] Test-Harness Foundation (Vitest) — Complete
+
+- **Date**: 2026-08-22
+- **Work performed**: Installed and configured Vitest 4.1.11 with the official `@vitejs/plugin-react` transformer, jsdom environment, and `@` path alias (`vitest.config.ts`). Added `test` / `test:watch` / `test:coverage` scripts to `package.json`. Dev dependencies added: `vitest@4.1.11`, `@vitest/coverage-v8@4.1.11`, `jsdom@30.0.1`, `@testing-library/react@16.3.2`, `@testing-library/user-event@14.6.6`, `@testing-library/jest-dom@7.0.1`, `fake-indexeddb@6.2.5`, `@vitejs/plugin-react@6.1.0`. Setup file `src/test/setup.ts` registers jest-dom matchers.
+- **Harness patterns proven** (5 test files, 34 tests, all passing):
+  - *Pure lib units*: `src/lib/utils/validation.test.ts` — zod schema behavior (accept/reject paths for register/login/change-password/section/university-settings schemas). Notable discovery: **zod v4's `.uuid()` enforces a version nibble `[1-8]`** — classic v1-style fixture UUIDs like `6f9619ff-8b86-d011-…` are rejected; tests use v4-format UUIDs. Relevant to F-029 work later.
+  - *CSV parse helpers*: `src/test/students-csv.test.ts` — mirrors and pins the header-mapping logic inlined in students/page.tsx handleFileParse (snake_case/TitleCase/camelCase headers, missing-field row skipping, blank-line skipping, whitespace trimming) ahead of Phase 8 import robustness.
+  - *Dexie against fake-indexeddb*: `src/lib/db/attendance.test.ts` — real Dexie operations over `fake-indexeddb/auto`: `getNextPeriodNumber` (empty/max+1/cross-subject-and-date isolation), archived-session filtering, and `createAttendanceSession`/`updateAttendanceSession` local-write + syncQueue-enqueue payload shape (snake_case remote payloads). This is the pattern Phase 6/7 sync-engine tests will reuse.
+  - *Mocked supabase-js client*: `src/lib/supabase/realtime.test.ts` — `vi.mock('@/lib/supabase/client')` with a chainable fake channel builder; asserts channel naming, postgres_changes config/filter scoping, subscription, and payload passthrough. No network, never touches the production project (Rule 12).
+  - *Component render*: `src/components/ui/button.test.tsx` — jsdom + Testing Library render, user-event click, disabled-state behavior over the existing Base UI button wrapper.
+- **Issues hit and resolved during setup**: (1) tsconfig `jsx: "preserve"` broke vite transform of `.tsx` — fixed by adding `@vitejs/plugin-react`; (2) initial validation-test UUID fixture rejected by zod v4 strict uuid format (see above) — fixture corrected, not the schema (schema change is out of scope until F-029).
+- **Verification gates**: `pnpm run lint` EXIT=0 (17 warnings / 0 errors — identical to Phase 0 baseline, no new warnings from test files); `pnpm exec tsc --noEmit` EXIT=0 clean; `pnpm run test` EXIT=0 (5 files / 34 tests passed); `pnpm run build` EXIT=0 (same route output as baseline).
+- **Code changes**: none to existing source files — only new config/test files, package.json devDependencies/scripts, README test instructions (all within Phase 2 scope).
+- **Notes for Phase 3+**: failing-first tests are now possible per protocol Rule 6. The Finding-to-Phase Map must be filled at Phase 3 start. DB-level claims still require precisely-mocked supabase-js clients (Docker remains absent).

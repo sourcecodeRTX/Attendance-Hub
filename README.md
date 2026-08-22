@@ -103,6 +103,18 @@ Ensure you have the following installed:
 5. **View the application:**
    Open your browser and navigate to [http://localhost:3000](http://localhost:3000).
 
+### Running Tests
+
+The project uses [Vitest](https://vitest.dev/) as its test runner (jsdom environment, `@` path alias supported):
+
+```bash
+pnpm test           # run all tests once
+pnpm run test:watch # watch mode
+pnpm run test:coverage # run with V8 coverage report
+```
+
+Tests live next to the code they cover as `*.test.ts` / `*.test.tsx`. Dexie/IndexedDB logic is tested against `fake-indexeddb`; Supabase clients are always mocked — tests never touch a real Supabase project.
+
 ## 🤝 Contributing
 
 We welcome contributions! Please feel free to submit a Pull Request.
