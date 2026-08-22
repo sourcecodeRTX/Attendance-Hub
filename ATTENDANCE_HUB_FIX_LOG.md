@@ -7,7 +7,7 @@ Source of truth for *how it's being fixed*: this file.
 
 | Phase | Name | Status | Session Date | Commit |
 |---|---|---|---|---|
-| 0 | Ground Truth Recon | Complete | 2026-08-22 | *(filled at commit)* |
+| 0 | Ground Truth Recon | Complete | 2026-08-22 | 2ea0eca |
 | 1 | Paranoid Read-Only Audit | Not started | | |
 | 2 | Test-Harness Foundation (Vitest) | Not started | | |
 | 3 | Auth & Session Security | Not started | | |
