@@ -9,7 +9,7 @@ Source of truth for *how it's being fixed*: this file.
 |---|---|---|---|---|
 | 0 | Ground Truth Recon | Complete | 2026-08-22 | 2ea0eca |
 | 1 | Paranoid Read-Only Audit | Complete | 2026-08-22 | 350c8fe |
-| 2 | Test-Harness Foundation (Vitest) | Complete | 2026-08-22 | (see entry) |
+| 2 | Test-Harness Foundation (Vitest) | Complete | 2026-08-22 | 06b3aec |
 | 3 | Auth & Session Security | Not started | | |
 | 4 | Supabase RLS & Database Security | Not started | | |
 | 5 | Secrets & Config Hygiene | Not started | | |
@@ -97,4 +97,5 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Issues hit and resolved during setup**: (1) tsconfig `jsx: "preserve"` broke vite transform of `.tsx` — fixed by adding `@vitejs/plugin-react`; (2) initial validation-test UUID fixture rejected by zod v4 strict uuid format (see above) — fixture corrected, not the schema (schema change is out of scope until F-029).
 - **Verification gates**: `pnpm run lint` EXIT=0 (17 warnings / 0 errors — identical to Phase 0 baseline, no new warnings from test files); `pnpm exec tsc --noEmit` EXIT=0 clean; `pnpm run test` EXIT=0 (5 files / 34 tests passed); `pnpm run build` EXIT=0 (same route output as baseline).
 - **Code changes**: none to existing source files — only new config/test files, package.json devDependencies/scripts, README test instructions (all within Phase 2 scope).
+- **Commit**: 06b3aec — fix(phase2): install and prove Vitest test harness — closes: Test-Harness Foundation (Vitest)
 - **Notes for Phase 3+**: failing-first tests are now possible per protocol Rule 6. The Finding-to-Phase Map must be filled at Phase 3 start. DB-level claims still require precisely-mocked supabase-js clients (Docker remains absent).
