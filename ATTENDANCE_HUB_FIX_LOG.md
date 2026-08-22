@@ -11,7 +11,7 @@ Source of truth for *how it's being fixed*: this file.
 | 1 | Paranoid Read-Only Audit | Complete | 2026-08-22 | 350c8fe |
 | 2 | Test-Harness Foundation (Vitest) | Complete | 2026-08-22 | 06b3aec |
 | 3 | Auth & Session Security | Complete | 2026-08-23 | 912f160 |
-| 4 | Supabase RLS & Database Security | Not started | | |
+| 4 | Supabase RLS & Database Security | Complete | 2026-08-23 | *(this commit)* |
 | 5 | Secrets & Config Hygiene | Not started | | |
 | 6 | Sync Engine Correctness (Dexie ↔ Supabase) | Not started | | |
 | 7 | Data Integrity & Write Concurrency | Not started | | |
@@ -80,6 +80,9 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 
 - **Phase 3:** `completeOrphanedProfile` seeds orphaned super_admin profiles with hardcoded `staff_id: 'ADMIN-001'` and `must_change_password: false` — cosmetic/integrity nit, behavior intentionally preserved (only identity sourcing was fixed). Candidate for a later sweep.
 - **Phase 3:** `adminBulkUpsert`/`restoreUniversityData` pass possibly-empty arrays to PostgREST `.upsert([])` — error-path behavior unverified against live PostgREST (pre-existing; Docker absent). Candidate for Phase 6/7 verification.
+- **Phase 4:** the `insert_university_users` policy's second branch (008:114-118) still lets an `admin` or `primary_teacher` mint profile rows of role `admin`/`primary_teacher`/`cr` for *other* auth uids client-side (the new F-004 trigger blocks only `super_admin`). Escalation-to-super is closed; lateral privileged-profile minting by non-super roles remains. Candidate for a later sweep.
+- **Phase 4:** under `admins_update_university_users`, an `admin` can still demote/deactivate *other super_admin* rows in their university (pre-existing scope, not widened). Closing it needs a definer-helper-based OLD-role check; deferred.
+- **Phase 4:** `/students` page line 131 filters **super_admins** to their own `departmentId` too (`user.role === 'admin' || user.role === 'super_admin'` branch), so a super_admin whose profile has a department sees a dept-scoped list there while RLS grants them university-wide reads. UI-only oddity; candidate for Phase 13/19.
 
 ---
 
@@ -195,4 +198,69 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Full verification result (Step 7)**: identical to F-001 entry — all four gates green.
 - **Interactions with prior fixes**: de-export also removes the endpoint surface that F-001-style attacks would have had through it.
 - **Residual risk / follow-ups**: duplicate-email-across-tenants restores now fail loudly rather than silently corrupting — intentional behavior change, documented here.
+- **Commit**: see tracker.
+
+### [FIXED] F-004 — RLS lets primary_teacher/admin self-promote to super_admin via users UPDATE
+
+- **Original severity**: Critical
+- **Phase**: 4 — Supabase RLS & Database Security
+- **Files changed**: `supabase/migrations/021_rls_escalation_audit_and_scope_fixes.sql` (new, append-only)
+- **Re-verification (Step 1)**: Confirmed on current chain — `update_university_users` (008:121-130) was never dropped by any later migration (verified by grepping every DROP/CREATE POLICY across 001–020); its USING clause allows any `primary_teacher`/`admin` to update any row in their university including their own `role`, with no WITH CHECK. `UPDATE users SET role='super_admin' WHERE id=auth.uid()` passes.
+- **Root cause (Step 2)**: The policy conflated three distinct capabilities in one permissive grant — self-maintenance, privileged others-management (which included primary_teacher), and role assignment — and RLS alone cannot compare OLD vs NEW rows, so nothing distinguished "edit a name" from "edit a role".
+- **Edge cases enumerated (Step 3)**: self-promotion via UPDATE → blocked by new policies + trigger; escalation via INSERT (the *symmetric* hole: 008's insert policy second branch let a primary_teacher insert a `super_admin` row for another uid) → blocked by the same trigger on INSERT; service-role flows (registration, restore, Phase-3 guarded actions) must keep assigning roles → trigger no-ops when `auth.uid() IS NULL`; legitimate client-JWT writes inventoried exhaustively before design: (a) change-password sets own `must_change_password=false`, (b) teachers page (`updateUserRole`, admin-gated UI) syncs `role` changes between `primary_teacher`↔`regular_teacher`, (c) super_admin dept-handover syncs `is_active=false` on the old admin and upserts a replacement with `role='admin'` — all verified to still pass; self-update trying to also change role/university_id → pinned by WITH CHECK against definer helpers (statement-start snapshot = pre-update values); cross-university row moves → university_id pinned in both policies' WITH CHECK; anonymous callers → policies scoped TO authenticated, helpers return NULL anyway; concurrent updates → snapshot semantics unchanged from before; performance → trigger fires only when `role` is an explicit SET target (`UPDATE OF role`).
+- **Fix design considered (Step 4)**: (a) column-level GRANTs (revoke table UPDATE, grant non-privileged columns) — rejected: supabase-js `.upsert()` emits `ON CONFLICT DO UPDATE SET <all payload columns>`, so excluding `role` from grants breaks the handover flow's legitimate new-admin upsert even when no conflict occurs; (b) two scoped RLS policies + a BEFORE INSERT OR UPDATE OF role guard trigger that rejects `NEW.role='super_admin'` transitions for authenticated sessions — chosen: preserves every inventoried legitimate path, blocks escalation through *both* the UPDATE and INSERT surfaces regardless of which policy would admit the row, and needs no schema or app-code changes. (Audit's hint of checking "both old and new row" is realized via the trigger's TG_OP/OLD logic since RLS expressions cannot see OLD.)
+- **Fix applied (Step 5)**: Migration 021 drops `update_university_users`; creates `users_self_update` (own row, role+university pinned via `get_my_role()`/`get_my_university_id()`) and `admins_update_university_users` (super_admin/admin only, other-row only, university pinned); installs `prevent_super_admin_escalation()` trigger (SECURITY INVOKER, ERRCODE 42501) on `users` for INSERT/UPDATE OF role, pass-through when `auth.uid()` is NULL.
+- **Tests added/modified (Step 6)**: `src/test/migrations-021.test.ts` — asserts the blanket policy is dropped and never re-created by any later migration; self-update WITH CHECK pins role/university; others-update restricted to super_admin/admin with primary_teacher absent; trigger exists on the right table/event, checks `(SELECT auth.uid()) IS NOT NULL`, raises 42501; helper dependencies exist in 008. All failed pre-fix (proven empirically: with 021 temporarily removed, the test file fails on missing-file; 14 tests skipped/failing). *Limitation honestly stated:* Docker is absent (Phase 0 note), so the SQL cannot be executed against a live Postgres here — verification is structural (SQL text) plus exhaustive caller-path tracing; actual behavior must be confirmed when migrations are applied to the Supabase project.
+- **Full verification result (Step 7)**: `pnpm run lint` EXIT=0 (17 warnings = exact Phase 0 baseline, 0 errors); `pnpm exec tsc --noEmit` EXIT=0; `pnpm run test` EXIT=0 (10 files / 87 tests); `pnpm run build` EXIT=0 (route output unchanged).
+- **Interactions with prior fixes**: Phase 3's server actions write profiles exclusively through the service-role admin client (RLS bypassed, trigger pass-through) — re-read and confirmed unaffected; `server-auth.ts` reads are SELECT-only.
+- **Residual risk / follow-ups**: admins can still demote/deactivate other super_admin rows (pre-existing scope, logged as new lead); insert policy's second branch still permits admin/primary_teacher lateral minting of lower-privileged roles (new lead).
+- **Commit**: see tracker.
+
+### [FIXED] F-012 — Activity logs forgeable by any member
+
+- **Original severity**: High
+- **Phase**: 4 — Supabase RLS & Database Security
+- **Files changed**: `supabase/migrations/021_rls_escalation_audit_and_scope_fixes.sql`
+- **Re-verification (Step 1)**: Confirmed — operative INSERT policy (002:286-287, never replaced) checks only `university_id = get_my_university_id()`; `logActivity` (src/lib/db/activity.ts:22-41) sends `performed_by_role/name/id` verbatim from client state. Any CR/teacher could fabricate entries attributed to anyone in their university.
+- **Root cause (Step 2)**: Audit-trail identity fields were client-authoritative data instead of server-derived facts; the policy validated tenancy but not attribution.
+- **Edge cases enumerated (Step 3)**: forged performed_by_* → overwritten server-side from the session profile; spoofed performed_by_id → additionally pinned by the rewritten WITH CHECK; authenticated caller with no profile row (orphaned edge) → insert fails loudly (honest failure beats misattributed log); service-key inserts (none exist today; future restore-side logging) → pass-through when `auth.uid()` IS NULL; offline queueing of logs → N/A (logActivity has no Dexie queue; failures already console-error only); display flows (`getActivityLogs`) → read the same columns, now guaranteed genuine; department-scoped admin reads → unchanged.
+- **Fix design considered (Step 4)**: (a) RLS-only WITH CHECK `performed_by_id = auth.uid()` — insufficient alone (name/role remain forgeable display fields); (b) BEFORE INSERT SECURITY DEFINER trigger rewriting all three fields from the verified profile + belt-and-braces WITH CHECK pin — chosen: covers every forgery surface, keeps existing client code untouched, and the definer read avoids any recursion concern.
+- **Fix applied (Step 5)**: Migration 021 adds `enforce_activity_log_actor()` trigger (rewrites `performed_by_id/role/name` from `users` keyed by `auth.uid()`; pass-through for service key; 42501 if no profile) and recreates `insert_activity_logs` requiring `performed_by_id = (SELECT auth.uid())`.
+- **Tests added/modified (Step 6)**: `src/test/migrations-021.test.ts` — trigger exists as BEFORE INSERT on activity_logs; body overrides all three fields sourcing FROM public.users WHERE id = v_uid; NULL-uid early return present; policy pins performed_by_id to caller uid. Failed pre-fix (same empirical proof as F-004). Same Docker-absent limitation applies — documented above.
+- **Full verification result (Step 7)**: identical to F-004 entry — all four gates green.
+- **Interactions with prior fixes**: none — activity-log writers were untouched by Phases 2–3; all call sites (`logActivity`) send real actor values today, so post-trigger values equal pre-trigger values in honest flows (no behavioral change for legit users).
+- **Residual risk / follow-ups**: super_admin DELETE of logs remains untamper-evident (audit noted it only in passing; deletion-policy hardening belongs to Phase 15 if pursued).
+- **Commit**: see tracker.
+
+### [FIXED] F-025 — Any authenticated user can spam-create universities
+
+- **Original severity**: Low
+- **Phase**: 4 — Supabase RLS & Database Security
+- **Files changed**: `supabase/migrations/021_rls_escalation_audit_and_scope_fixes.sql`
+- **Re-verification (Step 1)**: Confirmed — operative policy (008:84-88) admits any INSERT by any authenticated principal. Traced every reference to the table: the ONLY insert path in the entire codebase is `registerUniversity` via the service-role admin client (register/actions.ts:102); all other references (auth-provider, settings page, login action) are SELECTs.
+- **Root cause (Step 2)**: A bootstrap-era open INSERT policy survived after university creation had moved fully server-side — dead permission surface.
+- **Edge cases enumerated (Step 3)**: registration still works → service role bypasses RLS entirely; orphaned-university recovery path in registerUniversity (re-insert after partial registration) → same service-role path; authenticated junk/spam inserts → now structurally impossible (no INSERT policy exists ⇒ denied by default); future contributors adding client-side university creation → will fail visibly rather than silently rely on the open policy.
+- **Fix design considered (Step 4)**: (a) audit's bootstrap-pattern policy (`uid not yet having a profile`) — rejected: keeps a client-JWT write path that no code uses and is exactly the pattern that caused F-001-style drift; (b) drop the policy outright, relying on the fully-server-side creation flow — chosen (audit offered this option): least privilege, zero blast radius since no client-JWT inserts exist.
+- **Fix applied (Step 5)**: Migration 021 executes `DROP POLICY IF EXISTS "anyone_can_create_university" ON public.universities;` with no replacement. SELECT/UPDATE policies untouched.
+- **Tests added/modified (Step 6)**: `src/test/migrations-021.test.ts` — asserts the DROP exists, no CREATE POLICY targets universities anywhere in 021, and no later migration re-creates the dropped policy. Failed pre-fix. Same Docker-absent limitation.
+- **Full verification result (Step 7)**: identical to F-004 entry — all four gates green.
+- **Interactions with prior fixes**: none; universities SELECT policies (read_own_university) untouched.
+- **Residual risk / follow-ups**: none known; creation remains single-sourced behind the server action.
+- **Commit**: see tracker.
+
+### [FIXED] F-026 — Admin read/write scope asymmetry (cross-department reads)
+
+- **Original severity**: Low
+- **Phase**: 4 — Supabase RLS & Database Security
+- **Files changed**: `supabase/migrations/021_rls_escalation_audit_and_scope_fixes.sql`
+- **Re-verification (Step 1)**: Confirmed — `read_accessible_students`/`read_accessible_attendance` (008:154-196) grant admins whole-university SELECT while `admin_manage_students`/`admin_manage_attendance` (009) are department-scoped writes.
+- **Root cause (Step 2)**: The read policies grouped super_admin and admin into one unrestricted branch; the later comprehensive-write fixes (009) scoped admins without ever revisiting the read side.
+- **Intent resolution (product confirmation)**: user delegated the decision ("you choose"). Decided from code evidence: EVERY admin-facing surface is already department-scoped in the UI — `/students` filters sections to `user.departmentId` (students/page.tsx:131-133), `/export` loads `getSections(university.id, user.departmentId)` (export/page.tsx:85-88), AdminDashboard queries Dexie by `departmentId` (dashboard/page.tsx:236-249), and `/attendance` excludes admins by route permission. Cross-department READS therefore expose data no screen displays. Tightened.
+- **Edge cases enumerated (Step 3)**: super_admin scope → split into its own branch, whole-university reads preserved (SuperAdminDashboard relies on it); teacher/CR assignment scoping → preserved verbatim (user_sections ∪ user_subjects branches); admin with NULL department_id (`users.department_id` is nullable) → policy yields false ⇒ sees no students/attendance rows; accepted deliberately — every such UI already requires a truthy departmentId to render data, so the tighter DB matches the app contract; pullFromCloud under an admin session → now caches only dept-visible rows locally, which is strictly consistent with what that role may render; bulk student upload → goes through the Phase-3-guarded service-role action, unaffected; realtime payloads → RLS does not gate realtime delivery (pre-existing platform behavior, out of scope).
+- **Fix design considered (Step 4)**: (a) leave-as-is documenting intent — rejected: the UI evidence shows the broader read is dead exposure, and security posture should match rendered reality; (b) rewrite both SELECT policies splitting super_admin (unrestricted) from admin (`AND department_id = get_my_department_id()`) keeping teacher/CR scoping verbatim — chosen.
+- **Fix applied (Step 5)**: Migration 021 drops and recreates both policies with the three-way branch described above.
+- **Tests added/modified (Step 6)**: `src/test/migrations-021.test.ts` — both policies dropped+recreated; super_admin branch intact; admin branch contains `department_id = get_my_department_id()`; the old broad `IN ('super_admin','admin')` branch absent; teacher/CR subqueries and university scoping retained. Failed pre-fix. Same Docker-absent limitation.
+- **Full verification result (Step 7)**: identical to F-004 entry — all four gates green.
+- **Interactions with prior fixes**: none direct; complements 009's department-scoped admin writes (now symmetric read/write).
+- **Residual risk / follow-ups**: admins lacking department assignment lose student/attendance visibility entirely (documented above — matches UI requirements); subjects/user_subjects reads remain university-wide for all members (not part of this finding; noted for future review if product wants deeper narrowing).
 - **Commit**: see tracker.
