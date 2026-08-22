@@ -8,7 +8,7 @@ Source of truth for *how it's being fixed*: this file.
 | Phase | Name | Status | Session Date | Commit |
 |---|---|---|---|---|
 | 0 | Ground Truth Recon | Complete | 2026-08-22 | 2ea0eca |
-| 1 | Paranoid Read-Only Audit | Not started | | |
+| 1 | Paranoid Read-Only Audit | Complete | 2026-08-22 | 350c8fe |
 | 2 | Test-Harness Foundation (Vitest) | Not started | | |
 | 3 | Auth & Session Security | Not started | | |
 | 4 | Supabase RLS & Database Security | Not started | | |
@@ -74,3 +74,12 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Work performed**: branch/checkout sanity confirmed (Rule 10); environment facts recorded above; fresh baseline of all three existing verification gates captured (all green); this log created per §7 of the protocol.
 - **Code changes**: none (protocol-compliant — Phase 0 makes no source edits).
 - **Blockers for later phases**: Docker absent → local DB-instance testing impossible; test harness does not exist yet → Phase 1 audit may still write reproductions as manual traces, but failing-first automated tests only become possible after Phase 2.
+
+### [PHASE 1] Paranoid Read-Only Audit — Complete
+
+- **Date**: 2026-08-22
+- **Work performed**: Full adversarial read-only audit per §5 of the protocol. Read end-to-end: middleware, all auth flows + server actions (`register`, `login`, `(dashboard)/actions.ts`, `backup/actions.ts`), auth-provider/guard/stores, entire Dexie layer (index, sync, attendance, students, subjects, university, user-sections, activity, analytics), validation schemas, migrations 001–020 (operative RLS state reconciled through the DROP/CREATE chain: 002→004→005→006→008→009→013→016→020), attendance/students/activity-logs/backup/export pages, package.json/configs, `.env.local` names only. Produced `ATTENDANCE_HUB_AUDIT_FINDINGS.md`: **31 findings** — 5 Critical, 7 High, 12 Medium, 7 Low — each with file:line evidence, impact, confidence, and fix-direction-only suggestions.
+- **Code changes**: none beyond creating the audit file (protocol-compliant). Committed as `350c8fe`.
+- **Headline findings** (full detail in audit file): unauthenticated/under-authorized service-role server actions (F-001..F-003); users-table UPDATE self-promotion to super_admin via RLS (F-004); pullFromCloud silent 1000-row truncation + no delete propagation (F-005); missing SUPABASE_SERVICE_ROLE_KEY in env (F-006); hardcoded restore password + cross-tenant account hijack (F-007/F-008); sync poison pills & teacher bulk-upload never syncing (F-009).
+- **Verification gates**: N/A — no source code touched; lint/tsc/build baseline from Phase 0 remains authoritative for this commit.
+- **Notes for Phase 2+**: DB-level claims (F-004, F-015/F-016 constraint gap, F-025, F-026) were derived by migration tracing only (Docker absent) — reproduce with precisely-mocked supabase-js clients once Vitest lands. Finding-to-Phase Map to be filled at Phase 3 start.
