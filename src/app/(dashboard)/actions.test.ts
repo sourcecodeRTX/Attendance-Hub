@@ -204,3 +204,65 @@ describe('deactivateManagedAuthUser authorization (F-003)', () => {
     expect(h.bannedUserIds[0].attributes.ban_duration).toBe('876000h');
   });
 });
+
+describe('server-side input validation (F-029)', () => {
+  const authInput = { email: 'new@uni.com', password: 'Temp-abcd1234' };
+
+  it.each([
+    ['invalid email', { ...authInput, email: 'nope' }],
+    ['short password', { ...authInput, password: 'short' }],
+    ['over-long password', { ...authInput, password: 'x'.repeat(73) }],
+  ])('createManagedAuthUser rejects %s without calling the auth API', async (_label, bad) => {
+    h.caller = { userId: 'u-sa', role: 'super_admin', universityId: 'uni-1' };
+    const res = await createManagedAuthUser(bad as typeof authInput);
+    expect(res.success).toBe(false);
+    expect(h.createdAuthUsers).toHaveLength(0);
+  });
+
+  it('createManagedAuthUser passes trimmed email through to the auth API', async () => {
+    h.caller = { userId: 'u-sa', role: 'super_admin', universityId: 'uni-1' };
+    const res = await createManagedAuthUser({ ...authInput, email: '  new@uni.com ' });
+    expect(res.success).toBe(true);
+    expect(h.createdAuthUsers[0].email).toBe('new@uni.com');
+  });
+
+  it('createManagedUserProfile rejects whitespace-only names before any upsert', async () => {
+    h.caller = { userId: 'u-pt', role: 'primary_teacher', universityId: 'uni-1' };
+    const baseInput = {
+      id: 'target-uid',
+      university_id: 'uni-1',
+      full_name: '   ',
+      staff_id: 'ST-1',
+      email: 'target@uni.com',
+      department_id: null,
+      is_active: true,
+      must_change_password: true,
+      created_at: '2026-08-22T00:00:00Z',
+      created_by: 'spoofed',
+    };
+    const res = await createManagedUserProfile({ ...baseInput, role: 'cr' });
+    expect(res.success).toBe(false);
+    expect(h.upserts).toHaveLength(0);
+  });
+
+  it('createManagedUserProfile persists trimmed profile fields', async () => {
+    h.caller = { userId: 'u-pt', role: 'primary_teacher', universityId: 'uni-1' };
+    const baseInput = {
+      id: 'target-uid',
+      university_id: 'uni-1',
+      full_name: ' Target Person ',
+      staff_id: ' ST-1 ',
+      email: ' target@uni.com ',
+      department_id: null,
+      is_active: true,
+      must_change_password: true,
+      created_at: '2026-08-22T00:00:00Z',
+      created_by: 'spoofed',
+    };
+    const res = await createManagedUserProfile({ ...baseInput, role: 'cr' });
+    expect(res.success).toBe(true);
+    expect(h.upserts[0].payload.full_name).toBe('Target Person');
+    expect(h.upserts[0].payload.staff_id).toBe('ST-1');
+    expect(h.upserts[0].payload.email).toBe('target@uni.com');
+  });
+});

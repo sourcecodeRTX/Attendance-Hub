@@ -1,6 +1,7 @@
 import { db } from './index';
 import { Department, Branch, Specialisation, Section, User } from '@/lib/types';
 import { supabase } from '@/lib/supabase/client';
+import { toast } from 'sonner';
 
 // --- Departments ---
 export async function getDepartments(universityId: string): Promise<Department[]> {
@@ -10,7 +11,16 @@ export async function getDepartments(universityId: string): Promise<Department[]
     .eq('university_id', universityId);
 
   if (error) {
-    return db.departments.where('universityId').equals(universityId).toArray();
+    // Fail open to the offline cache, but say so — silently presenting a
+    // possibly-stale cache as fresh data is dishonest (F-024).
+    const cached = await db.departments.where('universityId').equals(universityId).toArray();
+    if (cached.length > 0) {
+      // Stable id so repeated failures replace the toast instead of stacking.
+      toast.warning("Couldn't reach the cloud — showing saved departments", {
+        id: 'departments-stale-cache',
+      });
+    }
+    return cached;
   }
 
   const departments: Department[] = (data ?? []).map((row) => ({

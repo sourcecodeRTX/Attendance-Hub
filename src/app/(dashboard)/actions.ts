@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getVerifiedCaller } from '@/lib/supabase/server-auth';
+import { managedAuthUserSchema, managedProfileSchema } from '@/lib/utils/validation';
 import type { UserRole } from '@/lib/types';
 
 interface CreateManagedAuthUserInput {
@@ -28,11 +29,23 @@ export async function createManagedAuthUser(
     return { success: false, error: 'Insufficient permissions.' };
   }
 
+  const parsedCredentials = managedAuthUserSchema.safeParse({
+    email: input.email,
+    password: input.password,
+  });
+  if (!parsedCredentials.success) {
+    return {
+      success: false,
+      error: parsedCredentials.error.issues[0]?.message ?? 'Invalid account details.',
+    };
+  }
+  const { email, password } = parsedCredentials.data;
+
   const adminClient = createAdminClient();
 
   const { data, error } = await adminClient.auth.admin.createUser({
-    email: input.email,
-    password: input.password,
+    email,
+    password,
     email_confirm: true,
   });
 
@@ -86,15 +99,27 @@ export async function createManagedUserProfile(
     return { success: false, error: 'Insufficient permissions.' };
   }
 
+  const parsedProfile = managedProfileSchema.safeParse({
+    full_name: input.full_name,
+    staff_id: input.staff_id,
+    email: input.email,
+  });
+  if (!parsedProfile.success) {
+    return {
+      success: false,
+      error: parsedProfile.error.issues[0]?.message ?? 'Invalid profile details.',
+    };
+  }
+
   const adminClient = createAdminClient();
 
   const { error } = await adminClient.from('users').upsert({
     id: input.id,
     university_id: input.university_id,
     role: input.role,
-    full_name: input.full_name,
-    staff_id: input.staff_id,
-    email: input.email,
+    full_name: parsedProfile.data.full_name,
+    staff_id: parsedProfile.data.staff_id,
+    email: parsedProfile.data.email,
     department_id: input.department_id,
     is_active: input.is_active,
     must_change_password: input.must_change_password,

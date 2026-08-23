@@ -575,7 +575,11 @@ export default function AttendancePage() {
         setActiveSessionId(sessionId);
         setIsNewSession(false);
 
-        toast.success(`Attendance saved for Period ${periodNumber}`);
+        // Honest copy (F-024): the write is committed locally and queued for
+        // cloud sync — it is not yet confirmed on the server here.
+        toast.success(
+          `Attendance saved for Period ${periodNumber} — will sync to cloud`,
+        );
       } else if (activeSessionId) {
         const existing = todaySessions.find((s) => s.id === activeSessionId);
         if (!existing) throw new Error('Session not found');
@@ -616,7 +620,7 @@ export default function AttendancePage() {
         );
 
         toast.success(
-          `Attendance updated for Period ${existing.periodNumber}`,
+          `Attendance updated for Period ${existing.periodNumber} — will sync to cloud`,
         );
       }
 

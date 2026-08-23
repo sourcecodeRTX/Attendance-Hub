@@ -118,6 +118,10 @@ export default function StudentsPage() {
         await pullFromCloud(university.id);
       } catch (pullErr) {
         console.warn('Cloud pull failed, using local data:', pullErr);
+        toast.warning("Couldn't reach the cloud — showing saved data", {
+          description: 'Changes made now will sync once the connection returns.',
+          id: 'students-stale-cache',
+        });
       }
 
       const allSections = await db.sections

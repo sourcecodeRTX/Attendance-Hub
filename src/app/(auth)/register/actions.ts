@@ -1,6 +1,7 @@
 'use server';
 
 import { createAdminClient } from '@/lib/supabase/admin';
+import { registerSchema } from '@/lib/utils/validation';
 
 interface RegisterInput {
   email: string;
@@ -17,19 +18,29 @@ interface RegisterResult {
 }
 
 export async function registerUniversity(input: RegisterInput): Promise<RegisterResult> {
+  // Server-side re-validation: the client form is not a trust boundary.
+  const parsed = registerSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? 'Invalid registration details.',
+    };
+  }
+  const values = parsed.data;
+
   const adminClient = createAdminClient();
 
   // Step 1: Check if university code is already taken (fast-fail)
   const { data: uniByCode } = await adminClient
     .from('universities')
     .select('id')
-    .eq('code', input.universityCode.toUpperCase())
+    .eq('code', values.universityCode.toUpperCase())
     .maybeSingle();
 
   if (uniByCode) {
     return {
       success: false,
-      error: `University code "${input.universityCode.toUpperCase()}" is already taken. Please choose a different code.`,
+      error: `University code "${values.universityCode.toUpperCase()}" is already taken. Please choose a different code.`,
     };
   }
 
@@ -39,8 +50,8 @@ export async function registerUniversity(input: RegisterInput): Promise<Register
   let authUserCreated = false;
 
   const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
-    email: input.email,
-    password: input.password,
+    email: values.email,
+    password: values.password,
     email_confirm: true, // auto-confirm so user can log in immediately
   });
 
@@ -50,7 +61,7 @@ export async function registerUniversity(input: RegisterInput): Promise<Register
       // Look up the existing auth user by email
       const { data: usersList } = await adminClient.auth.admin.listUsers();
       const existingAuthUser = usersList?.users?.find(
-        (u) => u.email === input.email
+        (u) => u.email === values.email
       );
 
       if (!existingAuthUser) {
@@ -101,8 +112,8 @@ export async function registerUniversity(input: RegisterInput): Promise<Register
 
     const { error: uniError } = await adminClient.from('universities').insert({
       id: universityId,
-      name: input.universityName,
-      code: input.universityCode.toUpperCase(),
+      name: values.universityName,
+      code: values.universityCode.toUpperCase(),
       super_admin_id: uid,
       attendance_threshold: 75,
     });
@@ -121,9 +132,9 @@ export async function registerUniversity(input: RegisterInput): Promise<Register
     id: uid,
     university_id: universityId,
     role: 'super_admin',
-    full_name: input.fullName,
-    staff_id: input.staffId,
-    email: input.email,
+    full_name: values.fullName,
+    staff_id: values.staffId,
+    email: values.email,
     is_active: true,
     must_change_password: false,
   });

@@ -4,7 +4,10 @@ import {
   loginSchema,
   changePasswordSchema,
   sectionSchema,
+  subjectSchema,
   universitySettingsSchema,
+  managedAuthUserSchema,
+  managedProfileSchema,
 } from '@/lib/utils/validation';
 
 describe('registerSchema', () => {
@@ -37,6 +40,90 @@ describe('registerSchema', () => {
     expect(registerSchema.safeParse({ ...valid, universityCode: 'X'.repeat(21) }).success).toBe(
       false
     );
+  });
+
+  it('rejects whitespace-only names (F-029)', () => {
+    expect(registerSchema.safeParse({ ...valid, fullName: '   ' }).success).toBe(false);
+    expect(registerSchema.safeParse({ ...valid, universityName: '  ' }).success).toBe(false);
+    expect(registerSchema.safeParse({ ...valid, staffId: ' ' }).success).toBe(false);
+  });
+
+  it('trims surrounding whitespace from parsed values (F-029)', () => {
+    const result = registerSchema.parse({
+      ...valid,
+      fullName: '  Ada Lovelace  ',
+      universityCode: ' EXU ',
+    });
+    expect(result.fullName).toBe('Ada Lovelace');
+    expect(result.universityCode).toBe('EXU');
+  });
+
+  it('enforces maximum lengths on person and university names (F-029)', () => {
+    expect(registerSchema.safeParse({ ...valid, fullName: 'A'.repeat(101) }).success).toBe(false);
+    expect(
+      registerSchema.safeParse({ ...valid, universityName: 'U'.repeat(151) }).success
+    ).toBe(false);
+  });
+
+  it('rejects passwords longer than the 72-byte auth limit (F-029)', () => {
+    expect(registerSchema.safeParse({ ...valid, password: 'x'.repeat(73) }).success).toBe(false);
+  });
+});
+
+describe('schema refinements (F-029)', () => {
+  const uuid = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+
+  it('rejects whitespace-only subject/section/department names', () => {
+    expect(subjectSchema.safeParse({ name: '   ', code: 'CS' }).success).toBe(false);
+    expect(sectionSchema.safeParse({ name: '  ', branchId: uuid }).success).toBe(false);
+  });
+
+  it('rejects over-long passwords at password-change time', () => {
+    expect(
+      changePasswordSchema.safeParse({
+        newPassword: 'x'.repeat(73),
+        confirmPassword: 'x'.repeat(73),
+      }).success
+    ).toBe(false);
+  });
+});
+
+describe('managedAuthUserSchema (F-029 server-side guard)', () => {
+  it('accepts a valid credential pair', () => {
+    expect(managedAuthUserSchema.safeParse({ email: 'a@b.co', password: 'Temp-abcd1234' }).success).toBe(
+      true
+    );
+  });
+
+  it('rejects bad emails, short and over-long passwords', () => {
+    expect(managedAuthUserSchema.safeParse({ email: 'nope', password: 'Temp-abcd1234' }).success).toBe(
+      false
+    );
+    expect(managedAuthUserSchema.safeParse({ email: 'a@b.co', password: 'short' }).success).toBe(
+      false
+    );
+    expect(managedAuthUserSchema.safeParse({ email: 'a@b.co', password: 'x'.repeat(73) }).success).toBe(
+      false
+    );
+  });
+});
+
+describe('managedProfileSchema (F-029 server-side guard)', () => {
+  const validProfile = { full_name: 'Target Person', staff_id: 'ST-1', email: 't@uni.com' };
+
+  it('accepts a valid profile triple and trims values', () => {
+    const result = managedProfileSchema.parse({
+      full_name: '  Target Person ',
+      staff_id: ' ST-1',
+      email: ' t@uni.com ',
+    });
+    expect(result).toEqual(validProfile);
+  });
+
+  it('rejects whitespace-only names and invalid emails', () => {
+    expect(managedProfileSchema.safeParse({ ...validProfile, full_name: ' ' }).success).toBe(false);
+    expect(managedProfileSchema.safeParse({ ...validProfile, staff_id: '' }).success).toBe(false);
+    expect(managedProfileSchema.safeParse({ ...validProfile, email: 'bad' }).success).toBe(false);
   });
 });
 
