@@ -91,12 +91,15 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Sound Effects</p>
+              <Label htmlFor="sound-effects" className="text-sm font-medium">
+                Sound Effects
+              </Label>
               <p className="text-xs text-muted-foreground">
                 Play sounds for attendance marking and notifications
               </p>
             </div>
             <Switch
+              id="sound-effects"
               checked={soundEnabled}
               onCheckedChange={setSoundEnabled}
             />

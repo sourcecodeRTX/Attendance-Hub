@@ -70,7 +70,7 @@ export function Header() {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-card px-4">
       <div className="min-w-0 flex-1">
-        <h1 className="truncate text-base font-semibold">{pageTitle}</h1>
+        <p className="truncate text-base font-semibold">{pageTitle}</p>
         {university && (
           <p className="truncate text-xs text-muted-foreground lg:hidden">
             {university.name}

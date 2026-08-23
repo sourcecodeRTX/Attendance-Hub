@@ -226,10 +226,12 @@ export default function BranchesPage() {
               <Input
                 id="branch-name"
                 placeholder="e.g. Information Technology"
+                aria-invalid={!!form.formState.errors.name}
+                aria-describedby={form.formState.errors.name ? 'branch-name-error' : undefined}
                 {...form.register('name')}
               />
               {form.formState.errors.name && (
-                <p className="text-xs text-destructive">
+                <p id="branch-name-error" role="alert" className="text-xs text-destructive">
                   {form.formState.errors.name.message}
                 </p>
               )}
@@ -239,10 +241,12 @@ export default function BranchesPage() {
               <Input
                 id="branch-code"
                 placeholder="e.g. IT"
+                aria-invalid={!!form.formState.errors.code}
+                aria-describedby={form.formState.errors.code ? 'branch-code-error' : undefined}
                 {...form.register('code')}
               />
               {form.formState.errors.code && (
-                <p className="text-xs text-destructive">
+                <p id="branch-code-error" role="alert" className="text-xs text-destructive">
                   {form.formState.errors.code.message}
                 </p>
               )}
@@ -279,10 +283,12 @@ export default function BranchesPage() {
               <Input
                 id="edit-branch-name"
                 placeholder="e.g. Information Technology"
+                aria-invalid={!!editForm.formState.errors.name}
+                aria-describedby={editForm.formState.errors.name ? 'edit-branch-name-error' : undefined}
                 {...editForm.register('name')}
               />
               {editForm.formState.errors.name && (
-                <p className="text-xs text-destructive">
+                <p id="edit-branch-name-error" role="alert" className="text-xs text-destructive">
                   {editForm.formState.errors.name.message}
                 </p>
               )}
@@ -292,10 +298,12 @@ export default function BranchesPage() {
               <Input
                 id="edit-branch-code"
                 placeholder="e.g. IT"
+                aria-invalid={!!editForm.formState.errors.code}
+                aria-describedby={editForm.formState.errors.code ? 'edit-branch-code-error' : undefined}
                 {...editForm.register('code')}
               />
               {editForm.formState.errors.code && (
-                <p className="text-xs text-destructive">
+                <p id="edit-branch-code-error" role="alert" className="text-xs text-destructive">
                   {editForm.formState.errors.code.message}
                 </p>
               )}

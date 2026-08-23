@@ -146,10 +146,12 @@ export default function ChangePasswordPage() {
               id="newPassword"
               placeholder="••••••••"
               showStrengthMeter
+              aria-invalid={!!errors.newPassword}
+              aria-describedby={errors.newPassword ? 'newPassword-error' : undefined}
               {...register('newPassword')}
             />
             {errors.newPassword && (
-              <p className="text-sm text-red-500">{errors.newPassword.message}</p>
+              <p id="newPassword-error" role="alert" className="text-sm text-red-500">{errors.newPassword.message}</p>
             )}
           </div>
           <div className="space-y-2">
@@ -157,10 +159,12 @@ export default function ChangePasswordPage() {
             <PasswordInput
               id="confirmPassword"
               placeholder="••••••••"
+              aria-invalid={!!errors.confirmPassword}
+              aria-describedby={errors.confirmPassword ? 'confirmPassword-error' : undefined}
               {...register('confirmPassword')}
             />
             {errors.confirmPassword && (
-              <p className="text-sm text-red-500">
+              <p id="confirmPassword-error" role="alert" className="text-sm text-red-500">
                 {errors.confirmPassword.message}
               </p>
             )}

@@ -16,7 +16,7 @@ export default function Error({
 
   return (
     <div className="flex h-screen flex-col items-center justify-center gap-4">
-      <h2 className="text-2xl font-bold">Something went wrong</h2>
+      <h1 className="text-2xl font-bold">Something went wrong</h1>
       <p className="text-muted-foreground">{error.message || 'An unexpected error occurred.'}</p>
       <Button onClick={reset}>Try again</Button>
     </div>

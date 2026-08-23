@@ -32,6 +32,7 @@ import type {
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -828,9 +829,9 @@ export default function AttendancePage() {
         <CardContent className="pt-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
-              <label className="mb-1.5 block text-sm font-medium">
+              <Label htmlFor="attendance-subject" className="mb-1.5">
                 Subject
-              </label>
+              </Label>
               <Select
                 value={selectedDropdownValue}
                 onValueChange={(val: string | null) => {
@@ -850,7 +851,7 @@ export default function AttendancePage() {
                   setViewingHistorySession(null);
                 }}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="attendance-subject" className="w-full">
                   <SelectValue placeholder="Select a subject" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1086,6 +1087,7 @@ export default function AttendancePage() {
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
+                                aria-label={`View details for period ${session.periodNumber}`}
                                 onClick={() =>
                                   handleViewHistorySession(session)
                                 }
@@ -1222,6 +1224,7 @@ function MarkingArea({
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search by name or roll number..."
+            aria-label="Search students by name or roll number"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -1231,7 +1234,7 @@ function MarkingArea({
           value={statusFilter}
           onValueChange={(val: any) => setStatusFilter(val as StatusFilter)}
         >
-          <SelectTrigger className="w-[120px]">
+          <SelectTrigger className="w-[120px]" aria-label="Filter students by status">
             <Filter className="mr-1 size-3.5" />
             <SelectValue />
           </SelectTrigger>
@@ -1248,7 +1251,10 @@ function MarkingArea({
             setSortOrder(val as 'original' | 'roll_number' | 'name')
           }
         >
-          <SelectTrigger className="w-[140px]">
+          <SelectTrigger
+            className="w-[140px]"
+            aria-label="Sort students"
+          >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -1286,6 +1292,13 @@ function MarkingArea({
               return (
               <div
                 key={student.id}
+                role={!isReadOnly ? 'button' : undefined}
+                tabIndex={!isReadOnly ? 0 : undefined}
+                aria-label={
+                  !isReadOnly
+                    ? `${student.fullName}, roll number ${student.rollNumber}. Currently ${isDutyLeave ? 'on duty leave' : isPresent ? 'present' : 'absent'}. Press to mark ${isDutyLeave || !isPresent ? 'present' : 'absent'}.`
+                    : `${student.fullName}, roll number ${student.rollNumber}. ${isDutyLeave ? 'On duty leave' : isPresent ? 'Present' : 'Absent'}`
+                }
                 className={cn(
                   'grid w-full grid-cols-[4.5rem_minmax(0,1fr)_4.2rem_2.5rem] items-center gap-1 px-2 py-2.5 transition-colors sm:grid-cols-[6.5rem_1fr_5rem_3.5rem] sm:gap-2 sm:px-4',
                   isDutyLeave
@@ -1293,7 +1306,7 @@ function MarkingArea({
                     : !isPresent
                       ? 'bg-red-50/50'
                       : '',
-                  !isReadOnly && 'cursor-pointer hover:bg-muted/50',
+                  !isReadOnly && 'cursor-pointer hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
                 )}
                   style={{
                     position: 'absolute',
@@ -1303,6 +1316,12 @@ function MarkingArea({
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
                 onClick={() => toggleAttendance(student.id)}
+                onKeyDown={(e) => {
+                  if (!isReadOnly && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault();
+                    toggleAttendance(student.id);
+                  }
+                }}
               >
                 <span className="truncate text-[11px] text-muted-foreground sm:font-mono sm:text-sm sm:whitespace-nowrap">
                   {student.rollNumber}
@@ -1321,6 +1340,7 @@ function MarkingArea({
                     <Button
                       variant={isDutyLeave ? 'default' : 'outline'}
                       size="xs"
+                      aria-label={`Toggle duty leave for ${student.fullName}, roll number ${student.rollNumber}`}
                       className={cn(
                         isDutyLeave &&
                           'bg-amber-600 text-white hover:bg-amber-700',

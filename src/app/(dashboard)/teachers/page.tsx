@@ -632,18 +632,18 @@ export default function TeachersPage() {
             {/* Assignment Form */}
             <div className="rounded-lg border p-4 space-y-4">
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-medium">Assign Subjects & Sections to Teacher</h3>
+                <h2 className="text-sm font-medium">Assign Subjects & Sections to Teacher</h2>
                 <HelpTooltip content={HELP_TOOLTIPS.teacherAssignment} />
               </div>
               
               {/* Step 1: Select Teacher */}
               <div className="space-y-1.5">
-                <Label>Teacher</Label>
+                <Label htmlFor="assign-teacher">Teacher</Label>
                 <Select
                   value={assignTeacherId}
                   onValueChange={(v) => { if (v) handleTeacherChange(v); }}
                 >
-                  <SelectTrigger className="w-full sm:max-w-sm">
+                  <SelectTrigger id="assign-teacher" className="w-full sm:max-w-sm">
                     <SelectValue placeholder="Select a teacher" />
                   </SelectTrigger>
                   <SelectContent>
@@ -656,16 +656,16 @@ export default function TeachersPage() {
                 </Select>
               </div>
 
-              {/* Step 1.5: Assignment Type */}
+                {/* Step 1.5: Assignment Type */}
               {assignTeacherId && (
                 <div className="space-y-1.5">
-                  <Label>Assignment Type</Label>
+                  <Label htmlFor="assignment-type">Assignment Type</Label>
                   <Select
                     value={currentAssignmentType}
                     onValueChange={(v) => setCurrentAssignmentType(v as 'primary' | 'regular')}
                     disabled={contextualMenuOpen}
                   >
-                    <SelectTrigger className="w-full sm:max-w-sm">
+                    <SelectTrigger id="assignment-type" className="w-full sm:max-w-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -679,13 +679,13 @@ export default function TeachersPage() {
               {/* Step 2: Select Subject (only shown after teacher selected) */}
               {assignTeacherId && (
                 <div className="space-y-1.5">
-                  <Label>Select Subject</Label>
+                  <Label htmlFor="assign-subject">Select Subject</Label>
                   <Select
                     value={assignSubjectId}
                     onValueChange={(v) => { if (v) handleSelectSubjectForAssignment(v); }}
                     disabled={contextualMenuOpen}
                   >
-                    <SelectTrigger className="w-full sm:max-w-sm">
+                    <SelectTrigger id="assign-subject" className="w-full sm:max-w-sm">
                       <SelectValue placeholder="Select a subject to assign" />
                     </SelectTrigger>
                     <SelectContent>
@@ -703,12 +703,13 @@ export default function TeachersPage() {
               {contextualMenuOpen && assignSubjectId && (
                 <div className="rounded-lg border p-4 bg-muted/30 space-y-3">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-medium">
+                    <h3 className="text-sm font-medium">
                       Select Sections for: {subjects.find(s => s.id === assignSubjectId)?.name}
-                    </h4>
+                    </h3>
                     <Button
                       variant="ghost"
                       size="icon-xs"
+                      aria-label="Cancel section selection"
                       onClick={() => {
                         setContextualMenuOpen(false);
                         setAssignSubjectId('');
@@ -774,7 +775,7 @@ export default function TeachersPage() {
               {/* Pending Assignments Preview */}
               {pendingAssignments.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="text-sm font-medium">Pending Assignments:</h4>
+                  <h3 className="text-sm font-medium">Pending Assignments:</h3>
                   <div className="flex flex-wrap gap-2">
                     {pendingAssignments.flatMap((pa) =>
                       pa.sectionIds.map((sectionId) => {
@@ -785,6 +786,7 @@ export default function TeachersPage() {
                               {subject?.code} - {section?.name} ({pa.assignmentType === 'primary' ? 'Primary' : 'Regular'})
                               <button
                                 type="button"
+                                aria-label={`Remove pending assignment: ${subject?.name ?? 'subject'} for ${section?.name ?? 'section'}`}
                                 onClick={() => handleRemovePendingAssignment(pa.subjectId, sectionId)}
                                 className="ml-1 hover:text-destructive"
                               >
@@ -813,7 +815,7 @@ export default function TeachersPage() {
 
             {/* Current Assignments List */}
             <div className="space-y-3">
-              <h3 className="text-sm font-medium">Current Assignments</h3>
+              <h2 className="text-sm font-medium">Current Assignments</h2>
               {currentAssignments.length === 0 ? (
                 <div className="py-6 text-center text-muted-foreground">
                   No subject assignments yet
@@ -895,10 +897,12 @@ export default function TeachersPage() {
               <Input
                 id="teacher-name"
                 placeholder="Teacher full name"
+                aria-invalid={!!form.formState.errors.fullName}
+                aria-describedby={form.formState.errors.fullName ? 'teacher-name-error' : undefined}
                 {...form.register('fullName')}
               />
               {form.formState.errors.fullName && (
-                <p className="text-xs text-destructive">
+                <p id="teacher-name-error" role="alert" className="text-xs text-destructive">
                   {form.formState.errors.fullName.message}
                 </p>
               )}
@@ -908,10 +912,12 @@ export default function TeachersPage() {
               <Input
                 id="teacher-staffid"
                 placeholder="e.g. TCH001"
+                aria-invalid={!!form.formState.errors.staffId}
+                aria-describedby={form.formState.errors.staffId ? 'teacher-staffid-error' : undefined}
                 {...form.register('staffId')}
               />
               {form.formState.errors.staffId && (
-                <p className="text-xs text-destructive">
+                <p id="teacher-staffid-error" role="alert" className="text-xs text-destructive">
                   {form.formState.errors.staffId.message}
                 </p>
               )}
@@ -922,17 +928,19 @@ export default function TeachersPage() {
                 id="teacher-email"
                 type="email"
                 placeholder="teacher@university.edu"
+                aria-invalid={!!form.formState.errors.email}
+                aria-describedby={form.formState.errors.email ? 'teacher-email-error' : undefined}
                 {...form.register('email')}
               />
               {form.formState.errors.email && (
-                <p className="text-xs text-destructive">
+                <p id="teacher-email-error" role="alert" className="text-xs text-destructive">
                   {form.formState.errors.email.message}
                 </p>
               )}
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-1">
-                <Label>Role</Label>
+                <Label htmlFor="create-teacher-role">Role</Label>
                 <HelpTooltip content={HELP_TOOLTIPS.teacherRole} />
               </div>
               <Controller
@@ -943,7 +951,7 @@ export default function TeachersPage() {
                     value={field.value}
                     onValueChange={(val) => field.onChange(val)}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger id="create-teacher-role" className="w-full">
                       <SelectValue placeholder="Select role" />
                     </SelectTrigger>
                     <SelectContent>
@@ -998,6 +1006,7 @@ export default function TeachersPage() {
                   <Button
                     variant="ghost"
                     size="icon-xs"
+                    aria-label="Copy temporary password to clipboard"
                     onClick={() => {
                       navigator.clipboard.writeText(tempCredentials.password);
                       toast.success('Password copied to clipboard');
@@ -1031,14 +1040,14 @@ export default function TeachersPage() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <div className="flex items-center gap-1">
-                <Label>Role</Label>
+                <Label htmlFor="edit-teacher-role">Role</Label>
                 <HelpTooltip content={HELP_TOOLTIPS.teacherRole} />
               </div>
               <Select
                 value={editRole}
                 onValueChange={(val) => setEditRole(val as 'primary_teacher' | 'regular_teacher')}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger id="edit-teacher-role" className="w-full">
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>

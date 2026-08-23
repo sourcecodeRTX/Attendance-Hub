@@ -485,7 +485,7 @@ export default function ActivityLogsPage() {
           <CardContent className="pt-4 space-y-6">
             {/* Auto-Delete Settings */}
             <div className="space-y-4">
-              <h3 className="font-medium text-sm">Auto-Delete Configuration</h3>
+              <h2 className="font-medium text-sm">Auto-Delete Configuration</h2>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
                 <div className="flex items-center gap-3">
                   <Switch
@@ -500,9 +500,9 @@ export default function ActivityLogsPage() {
                 
                 {autoDeleteEnabled && (
                   <div className="flex items-center gap-2">
-                    <Label className="text-muted-foreground whitespace-nowrap">Delete logs older than:</Label>
+                    <Label htmlFor="retention-days" className="text-muted-foreground whitespace-nowrap">Delete logs older than:</Label>
                     <Select value={retentionDays} onValueChange={(v) => { if (v) setRetentionDays(v); }}>
-                      <SelectTrigger className="w-32">
+                      <SelectTrigger id="retention-days" className="w-32">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -546,15 +546,15 @@ export default function ActivityLogsPage() {
 
             {/* Manual Delete Section */}
             <div className="space-y-4">
-              <h3 className="font-medium text-sm">Manual Log Deletion</h3>
+              <h2 className="font-medium text-sm">Manual Log Deletion</h2>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <Label>Select timeframe</Label>
-                  <Select 
-                    value={deleteTimeframe} 
+                  <Label htmlFor="delete-timeframe">Select timeframe</Label>
+                  <Select
+                    value={deleteTimeframe}
                     onValueChange={(val) => handleCountLogsToDelete(val as DeleteLogsTimeframe)}
                   >
-                    <SelectTrigger className="w-52">
+                    <SelectTrigger id="delete-timeframe" className="w-52">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

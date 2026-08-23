@@ -449,6 +449,8 @@ export default function DepartmentsPage() {
                       <Button
                         variant="ghost"
                         size="icon-xs"
+                        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} administrators for ${dept.name}`}
+                        aria-expanded={isExpanded}
                         onClick={() =>
                           setExpandedDeptId(isExpanded ? null : dept.id)
                         }
@@ -489,9 +491,9 @@ export default function DepartmentsPage() {
                     <TableRow>
                       <TableCell colSpan={7} className="bg-muted/30 p-0">
                         <div className="p-4 space-y-3">
-                          <h4 className="text-sm font-medium">
+                          <h2 className="text-sm font-medium">
                             Administrators ({dept.admins.length})
-                          </h4>
+                          </h2>
                           {dept.admins.length === 0 ? (
                             <p className="text-sm text-muted-foreground">
                               No administrators assigned
@@ -592,10 +594,12 @@ export default function DepartmentsPage() {
                 <Input
                   id="dept-name"
                   placeholder="e.g. Computer Science"
+                  aria-invalid={!!form.formState.errors.name}
+                  aria-describedby={form.formState.errors.name ? 'dept-name-error' : undefined}
                   {...form.register('name')}
                 />
                 {form.formState.errors.name && (
-                  <p className="text-xs text-destructive">
+                  <p id="dept-name-error" role="alert" className="text-xs text-destructive">
                     {form.formState.errors.name.message}
                   </p>
                 )}
@@ -605,10 +609,12 @@ export default function DepartmentsPage() {
                 <Input
                   id="dept-code"
                   placeholder="e.g. CS"
+                  aria-invalid={!!form.formState.errors.code}
+                  aria-describedby={form.formState.errors.code ? 'dept-code-error' : undefined}
                   {...form.register('code')}
                 />
                 {form.formState.errors.code && (
-                  <p className="text-xs text-destructive">
+                  <p id="dept-code-error" role="alert" className="text-xs text-destructive">
                     {form.formState.errors.code.message}
                   </p>
                 )}
@@ -624,10 +630,12 @@ export default function DepartmentsPage() {
                 <Input
                   id="admin-name"
                   placeholder="Admin full name"
+                  aria-invalid={!!form.formState.errors.adminFullName}
+                  aria-describedby={form.formState.errors.adminFullName ? 'admin-name-error' : undefined}
                   {...form.register('adminFullName')}
                 />
                 {form.formState.errors.adminFullName && (
-                  <p className="text-xs text-destructive">
+                  <p id="admin-name-error" role="alert" className="text-xs text-destructive">
                     {form.formState.errors.adminFullName.message}
                   </p>
                 )}
@@ -637,10 +645,12 @@ export default function DepartmentsPage() {
                 <Input
                   id="admin-staffid"
                   placeholder="e.g. ADM001"
+                  aria-invalid={!!form.formState.errors.adminStaffId}
+                  aria-describedby={form.formState.errors.adminStaffId ? 'admin-staffid-error' : undefined}
                   {...form.register('adminStaffId')}
                 />
                 {form.formState.errors.adminStaffId && (
-                  <p className="text-xs text-destructive">
+                  <p id="admin-staffid-error" role="alert" className="text-xs text-destructive">
                     {form.formState.errors.adminStaffId.message}
                   </p>
                 )}
@@ -651,10 +661,12 @@ export default function DepartmentsPage() {
                   id="admin-email"
                   type="email"
                   placeholder="admin@university.edu"
+                  aria-invalid={!!form.formState.errors.adminEmail}
+                  aria-describedby={form.formState.errors.adminEmail ? 'admin-email-error' : undefined}
                   {...form.register('adminEmail')}
                 />
                 {form.formState.errors.adminEmail && (
-                  <p className="text-xs text-destructive">
+                  <p id="admin-email-error" role="alert" className="text-xs text-destructive">
                     {form.formState.errors.adminEmail.message}
                   </p>
                 )}
@@ -696,6 +708,7 @@ export default function DepartmentsPage() {
                   <Button
                     variant="ghost"
                     size="icon-xs"
+                    aria-label="Copy temporary password to clipboard"
                     onClick={() => {
                       navigator.clipboard.writeText(tempCredentials.password);
                       toast.success('Password copied to clipboard');
@@ -741,10 +754,12 @@ export default function DepartmentsPage() {
                 <Input
                   id="handover-name"
                   placeholder="New admin full name"
+                  aria-invalid={!!handoverForm.formState.errors.fullName}
+                  aria-describedby={handoverForm.formState.errors.fullName ? 'handover-name-error' : undefined}
                   {...handoverForm.register('fullName')}
                 />
                 {handoverForm.formState.errors.fullName && (
-                  <p className="text-xs text-destructive">
+                  <p id="handover-name-error" role="alert" className="text-xs text-destructive">
                     {handoverForm.formState.errors.fullName.message}
                   </p>
                 )}
@@ -755,10 +770,12 @@ export default function DepartmentsPage() {
                 <Input
                   id="handover-staff-id"
                   placeholder="e.g. ADM002"
+                  aria-invalid={!!handoverForm.formState.errors.staffId}
+                  aria-describedby={handoverForm.formState.errors.staffId ? 'handover-staff-id-error' : undefined}
                   {...handoverForm.register('staffId')}
                 />
                 {handoverForm.formState.errors.staffId && (
-                  <p className="text-xs text-destructive">
+                  <p id="handover-staff-id-error" role="alert" className="text-xs text-destructive">
                     {handoverForm.formState.errors.staffId.message}
                   </p>
                 )}
@@ -770,10 +787,12 @@ export default function DepartmentsPage() {
                   id="handover-email"
                   type="email"
                   placeholder="new.admin@university.edu"
+                  aria-invalid={!!handoverForm.formState.errors.email}
+                  aria-describedby={handoverForm.formState.errors.email ? 'handover-email-error' : undefined}
                   {...handoverForm.register('email')}
                 />
                 {handoverForm.formState.errors.email && (
-                  <p className="text-xs text-destructive">
+                  <p id="handover-email-error" role="alert" className="text-xs text-destructive">
                     {handoverForm.formState.errors.email.message}
                   </p>
                 )}

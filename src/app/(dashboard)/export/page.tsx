@@ -402,12 +402,12 @@ export default function ExportPage() {
           <CardContent className="pt-4 space-y-4">
             {isSuperAdmin && (
               <div className="flex flex-col gap-1.5">
-                <Label>Department</Label>
+                <Label htmlFor="export-department">Department</Label>
                 <Select
                   value={selectedDepartment}
                   onValueChange={(val) => setSelectedDepartment(val as string)}
                 >
-                  <SelectTrigger className="w-full sm:w-64">
+                  <SelectTrigger id="export-department" className="w-full sm:w-64">
                     <SelectValue placeholder="Select Department" />
                   </SelectTrigger>
                   <SelectContent>
@@ -422,7 +422,7 @@ export default function ExportPage() {
             )}
 
             <div className="flex flex-col gap-1.5">
-              <Label>Section</Label>
+              <Label htmlFor="export-section">Section</Label>
               <Select
                 value={selectedSection}
                 onValueChange={(val) => setSelectedSection(val as string)}
@@ -432,7 +432,7 @@ export default function ExportPage() {
                     : sections.length === 0
                 }
               >
-                <SelectTrigger className="w-full sm:w-64">
+                <SelectTrigger id="export-section" className="w-full sm:w-64">
                   <SelectValue placeholder="Select Section" />
                 </SelectTrigger>
                 <SelectContent>
@@ -452,13 +452,13 @@ export default function ExportPage() {
 
             <TabsContent value="per-student">
               <div className="flex flex-col gap-1.5">
-                <Label>Student</Label>
+                <Label htmlFor="export-student">Student</Label>
                 <Select
                   value={selectedStudent}
                   onValueChange={(val) => setSelectedStudent(val as string)}
                   disabled={!selectedSection || filteredStudents.length === 0}
                 >
-                  <SelectTrigger className="w-full sm:w-80">
+                  <SelectTrigger id="export-student" className="w-full sm:w-80">
                     <SelectValue placeholder="Select Student" />
                   </SelectTrigger>
                   <SelectContent>
@@ -479,13 +479,13 @@ export default function ExportPage() {
 
             <TabsContent value="per-subject">
               <div className="flex flex-col gap-1.5">
-                <Label>Subject</Label>
+                <Label htmlFor="export-subject">Subject</Label>
                 <Select
                   value={selectedSubject}
                   onValueChange={(val) => setSelectedSubject(val as string)}
                   disabled={!selectedSection || subjects.length === 0}
                 >
-                  <SelectTrigger className="w-full sm:w-80">
+                  <SelectTrigger id="export-subject" className="w-full sm:w-80">
                     <SelectValue placeholder="Select Subject" />
                   </SelectTrigger>
                   <SelectContent>
@@ -550,7 +550,7 @@ export default function ExportPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-4">
-            <h3 className="font-semibold">{exportSummary.title}</h3>
+            <h2 className="font-semibold">{exportSummary.title}</h2>
             <div className="mt-2 flex flex-wrap gap-2">
               {exportSummary.details.map((detail, i) => (
                 <Badge key={i} variant="secondary">

@@ -567,6 +567,7 @@ export default function StudentsPage() {
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search by name or roll number..."
+            aria-label="Search students by name or roll number"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -582,7 +583,7 @@ export default function StudentsPage() {
                 }
               }}
             >
-              <SelectTrigger className="w-full sm:w-48">
+              <SelectTrigger className="w-full sm:w-48" aria-label="Filter by section">
                 <SelectValue placeholder="Filter by section" />
               </SelectTrigger>
               <SelectContent>
@@ -603,7 +604,7 @@ export default function StudentsPage() {
               setSortOrder(next);
             }}
           >
-            <SelectTrigger className="w-full sm:w-44">
+            <SelectTrigger className="w-full sm:w-44" aria-label="Sort students">
               <SelectValue placeholder="Sort order" />
             </SelectTrigger>
             <SelectContent>
@@ -691,7 +692,9 @@ export default function StudentsPage() {
                     {showMobileActions && (
                       <div className="px-1 py-2 text-center">
                         <DropdownMenu>
-                          <DropdownMenuTrigger>
+                          <DropdownMenuTrigger
+                            aria-label={`More actions for ${student.fullName}`}
+                          >
                             <MoreVertical className="size-3.5" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
@@ -741,6 +744,7 @@ export default function StudentsPage() {
                           <Button
                             variant="ghost"
                             size="icon-xs"
+                            aria-label={`Edit ${student.fullName}`}
                             onClick={() => openEdit(student)}
                           >
                             <Pencil className="size-3.5" />
@@ -748,6 +752,7 @@ export default function StudentsPage() {
                           <Button
                             variant="ghost"
                             size="icon-xs"
+                            aria-label={`Reassign ${student.fullName} to another section`}
                             onClick={() => openReassign(student)}
                           >
                             <ArrowRightLeft className="size-3.5" />
@@ -755,6 +760,7 @@ export default function StudentsPage() {
                           <Button
                             variant="ghost"
                             size="icon-xs"
+                            aria-label={`Deactivate ${student.fullName}`}
                             onClick={() => {
                               setDeleteStudent(student);
                               setDeleteOpen(true);
@@ -784,12 +790,12 @@ export default function StudentsPage() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label>Target Section</Label>
-              <Select 
-                value={actionSectionId || (teacherSectionIds.length > 0 ? teacherSectionIds[0] : '')} 
+              <Label htmlFor="add-target-section">Target Section</Label>
+              <Select
+                value={actionSectionId || (teacherSectionIds.length > 0 ? teacherSectionIds[0] : '')}
                 onValueChange={(val) => setActionSectionId(val || '')}
               >
-                <SelectTrigger>
+                <SelectTrigger id="add-target-section">
                   <SelectValue placeholder="Select section..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -849,12 +855,12 @@ export default function StudentsPage() {
 
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Target Section</Label>
-              <Select 
-                value={actionSectionId || (teacherSectionIds.length > 0 ? teacherSectionIds[0] : '')} 
+              <Label htmlFor="upload-target-section">Target Section</Label>
+              <Select
+                value={actionSectionId || (teacherSectionIds.length > 0 ? teacherSectionIds[0] : '')}
                 onValueChange={(val) => setActionSectionId(val || '')}
               >
-                <SelectTrigger>
+                <SelectTrigger id="upload-target-section">
                   <SelectValue placeholder="Select section..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -867,11 +873,14 @@ export default function StudentsPage() {
 
             {csvData.length === 0 ? (
               <div
+                role="button"
+                tabIndex={0}
+                aria-label="Upload a CSV file: drag and drop here, or press Enter to browse"
                 className={`flex min-h-[160px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed transition-colors ${
                   isDragging
                     ? 'border-primary bg-primary/5'
                     : 'border-muted-foreground/25 hover:border-muted-foreground/50'
-                }`}
+                } focus-visible:border-primary focus-visible:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
                 onDragOver={(e) => {
                   e.preventDefault();
                   setIsDragging(true);
@@ -879,6 +888,12 @@ export default function StudentsPage() {
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    fileInputRef.current?.click();
+                  }
+                }}
               >
                 <Upload className="mb-2 size-8 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
@@ -1050,12 +1065,12 @@ export default function StudentsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
-            <Label>Target Section</Label>
+            <Label htmlFor="reassign-target-section">Target Section</Label>
             <Select
               value={reassignSectionId}
               onValueChange={(value) => { if (value !== null) setReassignSectionId(value); }}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger id="reassign-target-section" className="w-full">
                 <SelectValue placeholder="Select a section" />
               </SelectTrigger>
               <SelectContent>

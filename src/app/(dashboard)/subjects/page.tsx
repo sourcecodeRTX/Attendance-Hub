@@ -434,6 +434,7 @@ export default function SubjectsPage() {
                       <Button
                         variant="ghost"
                         size="icon-xs"
+                        aria-label={`Edit subject ${subject.name}`}
                         onClick={() => openEditDialog(subject)}
                       >
                         <Pencil className="size-3.5" />
@@ -441,6 +442,7 @@ export default function SubjectsPage() {
                       <Button
                         variant="ghost"
                         size="icon-xs"
+                        aria-label={`Delete subject ${subject.name}`}
                         onClick={() => openDeleteDialog(subject)}
                       >
                         <Trash2 className="size-3.5" />
@@ -487,9 +489,10 @@ export default function SubjectsPage() {
                 onChange={(e) => setCreateName(e.target.value)}
                 placeholder="e.g. Data Structures"
                 aria-invalid={!!createErrors.name}
+                aria-describedby={createErrors.name ? 'subject-name-error' : undefined}
               />
               {createErrors.name && (
-                <p className="text-xs text-destructive">{createErrors.name}</p>
+                <p id="subject-name-error" role="alert" className="text-xs text-destructive">{createErrors.name}</p>
               )}
             </div>
             <div className="space-y-1.5">
@@ -500,15 +503,20 @@ export default function SubjectsPage() {
                 onChange={(e) => setCreateCode(e.target.value)}
                 placeholder="e.g. CS201"
                 aria-invalid={!!createErrors.code}
+                aria-describedby={createErrors.code ? 'subject-code-error' : undefined}
               />
               {createErrors.code && (
-                <p className="text-xs text-destructive">{createErrors.code}</p>
+                <p id="subject-code-error" role="alert" className="text-xs text-destructive">{createErrors.code}</p>
               )}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="department">Department</Label>
               <Select value={createDepartmentId} onValueChange={(v) => { if (v) setCreateDepartmentId(v); }}>
-                <SelectTrigger id="department" aria-invalid={!!createErrors.department}>
+                <SelectTrigger
+                  id="department"
+                  aria-invalid={!!createErrors.department}
+                  aria-describedby={createErrors.department ? 'department-error' : undefined}
+                >
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
@@ -520,7 +528,7 @@ export default function SubjectsPage() {
                 </SelectContent>
               </Select>
               {createErrors.department && (
-                <p className="text-xs text-destructive">{createErrors.department}</p>
+                <p id="department-error" role="alert" className="text-xs text-destructive">{createErrors.department}</p>
               )}
             </div>
             {createDepartmentId && (
@@ -551,7 +559,7 @@ export default function SubjectsPage() {
                     ))}
                 </div>
                 {createErrors.sections && (
-                  <p className="text-xs text-destructive">{createErrors.sections}</p>
+                  <p id="create-sections-error" role="alert" className="text-xs text-destructive">{createErrors.sections}</p>
                 )}
               </div>
             )}
@@ -596,9 +604,10 @@ export default function SubjectsPage() {
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="e.g. Data Structures"
                 aria-invalid={!!editErrors.name}
+                aria-describedby={editErrors.name ? 'edit-subject-name-error' : undefined}
               />
               {editErrors.name && (
-                <p className="text-xs text-destructive">{editErrors.name}</p>
+                <p id="edit-subject-name-error" role="alert" className="text-xs text-destructive">{editErrors.name}</p>
               )}
             </div>
             <div className="space-y-1.5">
@@ -609,9 +618,10 @@ export default function SubjectsPage() {
                 onChange={(e) => setEditCode(e.target.value)}
                 placeholder="e.g. CS201"
                 aria-invalid={!!editErrors.code}
+                aria-describedby={editErrors.code ? 'edit-subject-code-error' : undefined}
               />
               {editErrors.code && (
-                <p className="text-xs text-destructive">{editErrors.code}</p>
+                <p id="edit-subject-code-error" role="alert" className="text-xs text-destructive">{editErrors.code}</p>
               )}
             </div>
             <div className="space-y-1.5">
@@ -641,7 +651,7 @@ export default function SubjectsPage() {
                   ))}
               </div>
               {editErrors.sections && (
-                <p className="text-xs text-destructive">{editErrors.sections}</p>
+                <p id="edit-sections-error" role="alert" className="text-xs text-destructive">{editErrors.sections}</p>
               )}
             </div>
           </div>

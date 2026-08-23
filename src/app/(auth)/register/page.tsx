@@ -120,10 +120,12 @@ export default function RegisterPage() {
               id="fullName"
               type="text"
               placeholder="John Doe"
+              aria-invalid={!!errors.fullName}
+              aria-describedby={errors.fullName ? 'fullName-error' : undefined}
               {...register('fullName')}
             />
             {errors.fullName && (
-              <p className="text-sm text-red-500">{errors.fullName.message}</p>
+              <p id="fullName-error" role="alert" className="text-sm text-red-500">{errors.fullName.message}</p>
             )}
           </div>
 
@@ -133,10 +135,12 @@ export default function RegisterPage() {
               id="staffId"
               type="text"
               placeholder="STF-001"
+              aria-invalid={!!errors.staffId}
+              aria-describedby={errors.staffId ? 'staffId-error' : undefined}
               {...register('staffId')}
             />
             {errors.staffId && (
-              <p className="text-sm text-red-500">{errors.staffId.message}</p>
+              <p id="staffId-error" role="alert" className="text-sm text-red-500">{errors.staffId.message}</p>
             )}
           </div>
 
@@ -146,10 +150,12 @@ export default function RegisterPage() {
               id="email"
               type="email"
               placeholder="you@university.edu"
+              aria-invalid={!!errors.email}
+              aria-describedby={errors.email ? 'email-error' : undefined}
               {...register('email')}
             />
             {errors.email && (
-              <p className="text-sm text-red-500">{errors.email.message}</p>
+              <p id="email-error" role="alert" className="text-sm text-red-500">{errors.email.message}</p>
             )}
           </div>
 
@@ -159,10 +165,12 @@ export default function RegisterPage() {
               id="password"
               placeholder="••••••••"
               showStrengthMeter
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? 'password-error' : undefined}
               {...register('password')}
             />
             {errors.password && (
-              <p className="text-sm text-red-500">{errors.password.message}</p>
+              <p id="password-error" role="alert" className="text-sm text-red-500">{errors.password.message}</p>
             )}
           </div>
 
@@ -171,10 +179,12 @@ export default function RegisterPage() {
             <PasswordInput
               id="confirmPassword"
               placeholder="••••••••"
+              aria-invalid={!!errors.confirmPassword}
+              aria-describedby={errors.confirmPassword ? 'confirmPassword-error' : undefined}
               {...register('confirmPassword')}
             />
             {errors.confirmPassword && (
-              <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>
+              <p id="confirmPassword-error" role="alert" className="text-sm text-red-500">{errors.confirmPassword.message}</p>
             )}
           </div>
 
@@ -184,10 +194,12 @@ export default function RegisterPage() {
               id="universityName"
               type="text"
               placeholder="State University"
+              aria-invalid={!!errors.universityName}
+              aria-describedby={errors.universityName ? 'universityName-error' : undefined}
               {...register('universityName')}
             />
             {errors.universityName && (
-              <p className="text-sm text-red-500">{errors.universityName.message}</p>
+              <p id="universityName-error" role="alert" className="text-sm text-red-500">{errors.universityName.message}</p>
             )}
           </div>
 
@@ -197,10 +209,12 @@ export default function RegisterPage() {
               id="universityCode"
               type="text"
               placeholder="SU"
+              aria-invalid={!!errors.universityCode}
+              aria-describedby={errors.universityCode ? 'universityCode-error' : undefined}
               {...register('universityCode')}
             />
             {errors.universityCode && (
-              <p className="text-sm text-red-500">{errors.universityCode.message}</p>
+              <p id="universityCode-error" role="alert" className="text-sm text-red-500">{errors.universityCode.message}</p>
             )}
           </div>
 

@@ -306,7 +306,7 @@ export default function SpecialisationsPage() {
               )}
             </div>
             <div className="space-y-1.5">
-              <Label>Branch</Label>
+              <Label htmlFor="spec-create-branch">Branch</Label>
               <Controller
                 control={form.control}
                 name="branchId"
@@ -315,7 +315,12 @@ export default function SpecialisationsPage() {
                     value={field.value}
                     onValueChange={(val) => field.onChange(val)}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger
+                      id="spec-create-branch"
+                      className="w-full"
+                      aria-invalid={!!form.formState.errors.branchId}
+                      aria-describedby={form.formState.errors.branchId ? 'spec-create-branch-error' : undefined}
+                    >
                       <SelectValue placeholder="Select a branch" />
                     </SelectTrigger>
                     <SelectContent>
@@ -329,7 +334,7 @@ export default function SpecialisationsPage() {
                 )}
               />
               {form.formState.errors.branchId && (
-                <p className="text-xs text-destructive">
+                <p id="spec-create-branch-error" role="alert" className="text-xs text-destructive">
                   {form.formState.errors.branchId.message}
                 </p>
               )}
@@ -388,7 +393,7 @@ export default function SpecialisationsPage() {
               )}
             </div>
             <div className="space-y-1.5">
-              <Label>Branch</Label>
+              <Label htmlFor="spec-edit-branch">Branch</Label>
               <Controller
                 control={editForm.control}
                 name="branchId"
@@ -397,7 +402,12 @@ export default function SpecialisationsPage() {
                     value={field.value}
                     onValueChange={(val) => field.onChange(val)}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger
+                      id="spec-edit-branch"
+                      className="w-full"
+                      aria-invalid={!!editForm.formState.errors.branchId}
+                      aria-describedby={editForm.formState.errors.branchId ? 'spec-edit-branch-error' : undefined}
+                    >
                       <SelectValue placeholder="Select a branch" />
                     </SelectTrigger>
                     <SelectContent>
@@ -411,7 +421,7 @@ export default function SpecialisationsPage() {
                 )}
               />
               {editForm.formState.errors.branchId && (
-                <p className="text-xs text-destructive">
+                <p id="spec-edit-branch-error" role="alert" className="text-xs text-destructive">
                   {editForm.formState.errors.branchId.message}
                 </p>
               )}

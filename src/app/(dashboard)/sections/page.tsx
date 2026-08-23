@@ -342,7 +342,7 @@ export default function SectionsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Branch</Label>
+              <Label htmlFor="section-branch">Branch</Label>
               <Controller
                 control={form.control}
                 name="branchId"
@@ -351,7 +351,12 @@ export default function SectionsPage() {
                     field.onChange(val);
                     form.setValue('specialisationId', ''); // Reset spec when branch changes
                   }}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger
+                      id="section-branch"
+                      className="w-full"
+                      aria-invalid={!!form.formState.errors.branchId}
+                      aria-describedby={form.formState.errors.branchId ? 'section-branch-error' : undefined}
+                    >
                       <SelectValue placeholder="Select a branch" />
                     </SelectTrigger>
                     <SelectContent>
@@ -365,7 +370,7 @@ export default function SectionsPage() {
                 )}
               />
               {form.formState.errors.branchId && (
-                <p className="text-xs text-destructive">
+                <p id="section-branch-error" role="alert" className="text-xs text-destructive">
                   {form.formState.errors.branchId.message}
                 </p>
               )}
@@ -373,7 +378,7 @@ export default function SectionsPage() {
 
             <div className="space-y-1.5">
               <div className="flex items-center gap-1">
-                <Label>Specialisation (Optional)</Label>
+                <Label htmlFor="section-specialisation">Specialisation (Optional)</Label>
                 <HelpTooltip content={HELP_TOOLTIPS.specialisation} />
               </div>
               <Controller
@@ -381,7 +386,7 @@ export default function SectionsPage() {
                 name="specialisationId"
                 render={({ field }) => (
                   <Select value={field.value} onValueChange={field.onChange} disabled={!form.watch('branchId')}>
-                    <SelectTrigger className="w-full flex-1 min-w-0" style={{ maxWidth: '100%' }}>
+                    <SelectTrigger id="section-specialisation" className="w-full flex-1 min-w-0" style={{ maxWidth: '100%' }}>
                       <div className="truncate">
                         <SelectValue placeholder="Select a specialisation or None" />
                       </div>

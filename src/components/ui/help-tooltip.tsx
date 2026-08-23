@@ -150,6 +150,7 @@ export function HelpTooltip({
   const [isMobile, setIsMobile] = React.useState(false);
   const tooltipRef = React.useRef<HTMLDivElement>(null);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const tooltipId = React.useId();
   
   const optimalSide = useAutoPosition(buttonRef, isOpen, side);
 
@@ -200,19 +201,24 @@ export function HelpTooltip({
         ref={buttonRef}
         type="button"
         onClick={() => isMobile && setIsOpen(!isOpen)}
+        onFocus={() => !isMobile && setIsOpen(true)}
+        onBlur={() => !isMobile && setIsOpen(false)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setIsOpen(false);
+        }}
         className={cn(
           'inline-flex items-center justify-center rounded-full p-0.5 text-muted-foreground hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           iconClassName
         )}
         aria-label="Help"
-        aria-describedby={isOpen ? 'tooltip-content' : undefined}
+        aria-describedby={isOpen ? tooltipId : undefined}
       >
         <HelpCircle className="size-4" />
       </button>
       
       {isOpen && (
         <div
-          id="tooltip-content"
+          id={tooltipId}
           role="tooltip"
           className={cn(
             'absolute z-50 w-64 rounded-md border bg-popover px-3 py-2 text-sm text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95',

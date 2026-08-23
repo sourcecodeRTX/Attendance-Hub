@@ -85,10 +85,12 @@ export default function ForgotPasswordPage() {
                   id="email"
                   type="email"
                   placeholder="you@university.edu"
+                  aria-invalid={!!errors.email}
+                  aria-describedby={errors.email ? 'email-error' : undefined}
                   {...register('email')}
                 />
                 {errors.email && (
-                  <p className="text-sm text-red-500">{errors.email.message}</p>
+                  <p id="email-error" role="alert" className="text-sm text-red-500">{errors.email.message}</p>
                 )}
               </div>
               <Button type="submit" className="w-full" disabled={isLoading}>

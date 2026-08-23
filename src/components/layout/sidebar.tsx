@@ -35,7 +35,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r bg-card lg:flex">
+    <aside aria-label="Primary" className="hidden w-64 shrink-0 flex-col border-r bg-card lg:flex">
       <div className="flex h-14 items-center gap-2 px-4">
         <span className="truncate text-sm font-semibold">
           {university?.name ?? 'ATT Tracker'}
@@ -52,6 +52,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              aria-current={isActive ? 'page' : undefined}
               className={cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 isActive
