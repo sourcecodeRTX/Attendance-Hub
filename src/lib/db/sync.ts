@@ -406,6 +406,33 @@ async function reconcileDeletes(
   }
 }
 
+// Apply a single realtime postgres_changes payload directly into the local
+// Dexie cache instead of re-pulling every table (F-019). INSERT/UPDATE events
+// carry the full new row (snake_case) and are mapped like pull rows; DELETE
+// events carry the old row's id. Deletion is skipped for rows with pending
+// unsynced local work, mirroring reconcileDeletes' protection.
+export async function applyRemoteChange(
+  collection: string,
+  eventType: string,
+  newRow: any,
+  oldRow: any
+): Promise<void> {
+  const spec = PULL_TABLES.find((t) => t.remote === collection);
+  if (!spec) return;
+
+  if (eventType === 'DELETE') {
+    const removedId = oldRow?.id;
+    if (typeof removedId !== 'string' || removedId === '') return;
+    const pendingIds = await collectPendingSyncDocIds();
+    if (pendingIds.has(removedId)) return;
+    await spec.local.delete(removedId);
+    return;
+  }
+
+  if (!newRow || typeof newRow.id !== 'string' || newRow.id === '') return;
+  await spec.local.put(mapRemoteToLocal(collection, newRow));
+}
+
 export async function pullFromCloud(universityId: string): Promise<void> {
   if (!navigator.onLine) return;
 

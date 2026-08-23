@@ -1,6 +1,11 @@
 import { createClient } from './client';
 import type { AttendanceSession, Student, Subject } from '@/lib/types';
 
+// Realtime callbacks coalesce bursts of row events into a single local
+// re-read after this quiet period (F-019). Row application itself is
+// immediate and unconditional per event.
+export const REALTIME_REFRESH_DEBOUNCE_MS = 300;
+
 type RealtimeCallback<T> = (payload: { eventType: string; new: T; old: T }) => void;
 
 export function subscribeToAttendanceSessions(

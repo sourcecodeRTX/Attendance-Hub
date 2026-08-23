@@ -72,8 +72,9 @@ import {
   ChevronRight,
   Eye,
 } from 'lucide-react';
-import { subscribeToAttendanceSessions } from '@/lib/supabase/realtime';
-import { pullFromCloud } from '@/lib/db/sync';
+import { subscribeToAttendanceSessions, REALTIME_REFRESH_DEBOUNCE_MS } from '@/lib/supabase/realtime';
+import { pullFromCloud, applyRemoteChange } from '@/lib/db/sync';
+import { debounce } from '@/lib/utils/debounce';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 // ---------------------------------------------------------------------------
@@ -342,13 +343,23 @@ export default function AttendancePage() {
   useEffect(() => {
     if (!user || !university || !selectedSubjectId || !userSectionId) return;
 
-    const channel = subscribeToAttendanceSessions(userSectionId, async () => {
-      await pullFromCloud(university.id);
-      setRefreshKey((v) => v + 1);
+    // Realtime events apply their changed session directly into Dexie and
+    // only debounce the local re-read — never a full pullFromCloud (F-019).
+    const scheduleRefresh = debounce(() => setRefreshKey((v) => v + 1), REALTIME_REFRESH_DEBOUNCE_MS);
+
+    const channel = subscribeToAttendanceSessions(userSectionId, (payload) => {
+      void applyRemoteChange(
+        'attendance_sessions',
+        payload.eventType,
+        payload.new as any,
+        payload.old as any
+      );
+      scheduleRefresh();
     });
 
     return () => {
       channel.unsubscribe();
+      scheduleRefresh.cancel();
     };
   }, [user, university, selectedSubjectId, userSectionId]);
 

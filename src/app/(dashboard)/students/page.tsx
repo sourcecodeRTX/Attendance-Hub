@@ -13,8 +13,9 @@ import {
 import { getUserSections } from '@/lib/db/user-sections';
 import { logActivity } from '@/lib/db/activity';
 import { db } from '@/lib/db/index';
-import { pullFromCloud } from '@/lib/db/sync';
-import { subscribeToStudents } from '@/lib/supabase/realtime';
+import { pullFromCloud, applyRemoteChange } from '@/lib/db/sync';
+import { subscribeToStudents, REALTIME_REFRESH_DEBOUNCE_MS } from '@/lib/supabase/realtime';
+import { debounce } from '@/lib/utils/debounce';
 import type { Student, Section } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -109,21 +110,10 @@ export default function StudentsPage() {
   const isPrimaryTeacher = user?.role === 'primary_teacher';
   const isAdmin = user?.role === 'admin';
 
-  const loadData = useCallback(async () => {
+  const loadLocalStudents = useCallback(async () => {
     if (!user || !university) return;
     setLoading(true);
     try {
-      // Pull latest data from Supabase (don't let failure block local load)
-      try {
-        await pullFromCloud(university.id);
-      } catch (pullErr) {
-        console.warn('Cloud pull failed, using local data:', pullErr);
-        toast.warning("Couldn't reach the cloud — showing saved data", {
-          description: 'Changes made now will sync once the connection returns.',
-          id: 'students-stale-cache',
-        });
-      }
-
       const allSections = await db.sections
         .where('universityId')
         .equals(university.id)
@@ -170,6 +160,21 @@ export default function StudentsPage() {
     }
   }, [user, university]);
 
+  const loadData = useCallback(async () => {
+    if (!user || !university) return;
+    // Pull latest data from Supabase (don't let failure block local load)
+    try {
+      await pullFromCloud(university.id);
+    } catch (pullErr) {
+      console.warn('Cloud pull failed, using local data:', pullErr);
+      toast.warning("Couldn't reach the cloud — showing saved data", {
+        description: 'Changes made now will sync once the connection returns.',
+        id: 'students-stale-cache',
+      });
+    }
+    await loadLocalStudents();
+  }, [user, university, loadLocalStudents]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
@@ -185,21 +190,31 @@ export default function StudentsPage() {
 
   useEffect(() => {
     if (!user || !university) return;
+    if (teacherSectionIds.length === 0) return;
 
-    const sectionIds = [...new Set(students.map((s) => s.sectionId))];
-    if (sectionIds.length === 0) return;
+    // Realtime events apply their changed row directly into Dexie and only
+    // debounce a local re-read — never a full pullFromCloud (F-019).
+    const refreshLocal = debounce(() => {
+      void loadLocalStudents();
+    }, REALTIME_REFRESH_DEBOUNCE_MS);
 
-    const channels = sectionIds.map((sectionId) =>
-      subscribeToStudents(sectionId, async () => {
-        await pullFromCloud(university.id);
-        await loadData();
+    const channels = teacherSectionIds.map((sectionId) =>
+      subscribeToStudents(sectionId, (payload) => {
+        void applyRemoteChange(
+          'students',
+          payload.eventType,
+          payload.new as any,
+          payload.old as any
+        );
+        refreshLocal();
       })
     );
 
     return () => {
       channels.forEach((channel) => channel.unsubscribe());
+      refreshLocal.cancel();
     };
-  }, [user, university, students, loadData]);
+  }, [user, university, teacherSectionIds, loadLocalStudents]);
 
   const filteredStudents = useMemo(() => {
     let list = students.filter((s) => s.isActive);

@@ -118,7 +118,7 @@ const fakeSupabase = {
 import { db } from '@/lib/db/index';
 import type { SyncQueueItem } from '@/lib/types/sync';
 import type { AttendanceMarker, AttendanceSession } from '@/lib/types';
-import { mapRemoteToLocal, processSyncQueue, pullFromCloud } from '@/lib/db/sync';
+import { mapRemoteToLocal, processSyncQueue, pullFromCloud, applyRemoteChange } from '@/lib/db/sync';
 import { useUIStore } from '@/lib/stores/ui-store';
 
 function makeQueueItem(overrides: Partial<SyncQueueItem> = {}): SyncQueueItem {
@@ -185,7 +185,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('F-005 — pullFromCloud pagination', () => {
+describe('F-005 â€” pullFromCloud pagination', () => {
   it('pages through tables larger than one page and caches every row', async () => {
     remoteTables['students'] = {
       rows: Array.from({ length: 501 }, (_, i) => ({
@@ -317,7 +317,7 @@ describe('F-005 — pullFromCloud pagination', () => {
   });
 });
 
-describe('F-027 — strict remote mapping', () => {
+describe('F-027 â€” strict remote mapping', () => {
   it('throws on an unmapped table instead of passing raw snake_case rows into typed stores', () => {
     expect(() => mapRemoteToLocal('some_future_table', { id: 'x', some_col: 1 })).toThrow(
       /unmapped table/
@@ -351,7 +351,7 @@ describe('F-027 — strict remote mapping', () => {
   });
 });
 
-describe('F-009 — queue claiming, backoff, dead-lettering', () => {
+describe('F-009 â€” queue claiming, backoff, dead-lettering', () => {
   it('processes a claimed create once and removes the item on success', async () => {
     await db.syncQueue.add(makeQueueItem());
 
@@ -462,7 +462,7 @@ describe('F-009 — queue claiming, backoff, dead-lettering', () => {
   });
 });
 
-describe('F-010 — revision-based attendance conflict resolution', () => {
+describe('F-010 â€” revision-based attendance conflict resolution', () => {
   it('CR update against a teacher-locked remote row overwrites local from remote and drops the item', async () => {
     await addSessionRow({ id: 'sess-locked', lockedByTeacher: true, revision: 4 });
     remoteTables['attendance_sessions'] = {
@@ -561,7 +561,7 @@ describe('F-010 — revision-based attendance conflict resolution', () => {
 
   it('clock-skewed local edit loses when the server revision moved ahead', async () => {
     // Local baseline revision 2, remote has advanced to 3 (another device won).
-    // Local marker claims a NEWER wall-clock time than the remote write — the
+    // Local marker claims a NEWER wall-clock time than the remote write â€” the
     // old clock-based LWW pushed this edit and clobbered the remote winner.
     await addSessionRow({
       id: 'sess-skew',
@@ -617,7 +617,7 @@ describe('F-010 — revision-based attendance conflict resolution', () => {
 
   it('bumps the local stored revision after a successful attendance push', async () => {
     await addSessionRow({ id: 'sess-push', revision: 6 });
-    remoteTables['attendance_sessions'] = { rows: [] }; // no remote row yet → push allowed
+    remoteTables['attendance_sessions'] = { rows: [] }; // no remote row yet â†’ push allowed
 
     await db.syncQueue.add(
       makeQueueItem({
@@ -636,7 +636,7 @@ describe('F-010 — revision-based attendance conflict resolution', () => {
   });
 });
 
-describe('F-016 — same-period create conflict (unique constraint, migration 023)', () => {
+describe('F-016 â€” same-period create conflict (unique constraint, migration 023)', () => {
   const dupError = {
     code: '23505',
     message: 'duplicate key value violates unique constraint "attendance_sessions_subject_date_period_unique"',
@@ -684,5 +684,119 @@ describe('F-016 — same-period create conflict (unique constraint, migration 02
     expect(items[0].retryCount).toBe(1);
     expect(items[0].nextAttemptAt).toBeDefined();
     expect(items[0].retryCount).toBeLessThan(5);
+  });
+});
+
+describe('F-019 â€” applyRemoteChange targeted realtime application', () => {
+  const snakeStudent = {
+    id: 'stu-rt-1',
+    university_id: 'uni-1',
+    department_id: 'dept-1',
+    branch_id: null,
+    specialisation_id: null,
+    section_id: 'sec-1',
+    roll_number: 'RT-001',
+    full_name: 'Realtime Student',
+    is_active: true,
+    uploaded_at: '2026-08-23T00:00:00.000Z',
+    uploaded_by: 'teacher-1',
+  };
+
+  it('applies an INSERT payload as a mapped camelCase row without any pull', async () => {
+    await applyRemoteChange('students', 'INSERT', snakeStudent, null);
+
+    const row = await db.students.get('stu-rt-1');
+    expect(row).toBeDefined();
+    if (!row) throw new Error('row missing');
+    expect(row.universityId).toBe('uni-1');
+    expect(row.sectionId).toBe('sec-1');
+    expect(row.rollNumber).toBe('RT-001');
+    expect(row.fullName).toBe('Realtime Student');
+    expect(row.isActive).toBe(true);
+  });
+
+  it('applies an UPDATE payload by overwriting the existing row', async () => {
+    await db.students.put(mapRemoteToLocal('students', snakeStudent));
+
+    const updated = { ...snakeStudent, full_name: 'Renamed Student', is_active: false };
+    await applyRemoteChange('students', 'UPDATE', updated, snakeStudent);
+
+    const row = await db.students.get('stu-rt-1');
+    expect(row).toBeDefined();
+    if (!row) throw new Error('row missing');
+    expect(row.fullName).toBe('Renamed Student');
+    expect(row.isActive).toBe(false);
+  });
+
+  it('applies a DELETE payload by removing the local row', async () => {
+    await db.students.put(mapRemoteToLocal('students', snakeStudent));
+
+    await applyRemoteChange('students', 'DELETE', null, snakeStudent);
+
+    expect(await db.students.get('stu-rt-1')).toBeUndefined();
+  });
+
+  it('skips DELETE for a row with pending unsynced local work', async () => {
+    await db.students.put(mapRemoteToLocal('students', snakeStudent));
+    await db.syncQueue.add(
+      makeQueueItem({ type: 'update', collection: 'students', docId: 'stu-rt-1' })
+    );
+
+    await applyRemoteChange('students', 'DELETE', null, snakeStudent);
+
+    // Pending-write protection mirrors reconcileDeletes: the row survives.
+    expect(await db.students.get('stu-rt-1')).toBeDefined();
+  });
+
+  it('DELETE with no usable old-row id is a harmless no-op', async () => {
+    await db.students.put(mapRemoteToLocal('students', snakeStudent));
+
+    await applyRemoteChange('students', 'DELETE', null, null);
+    await applyRemoteChange('students', 'DELETE', null, {});
+
+    expect(await db.students.get('stu-rt-1')).toBeDefined();
+  });
+
+  it('attendance_sessions UPDATE payloads are mapped including revision', async () => {
+    const remoteSession = {
+      id: 'sess-rt-1',
+      university_id: 'uni-1',
+      department_id: 'dept-1',
+      section_id: 'sec-1',
+      subject_id: 'subj-1',
+      date: '2026-08-23',
+      period_number: 2,
+      period_label: null,
+      records: [],
+      locked_by_teacher: false,
+      is_archived: false,
+      created_by: teacherMarker,
+      last_modified_by: teacherMarker,
+      created_at: '2026-08-23T09:00:00.000Z',
+      revision: 7,
+    };
+
+    await applyRemoteChange('attendance_sessions', 'INSERT', remoteSession, null);
+
+    const row = await db.attendanceSessions.get('sess-rt-1');
+    expect(row).toBeDefined();
+    if (!row) throw new Error('row missing');
+    expect(row.periodNumber).toBe(2);
+    expect(row.revision).toBe(7);
+  });
+
+  it('unknown collections are ignored without throwing', async () => {
+    await expect(
+      applyRemoteChange('not_a_real_table', 'INSERT', { id: 'x' }, null)
+    ).resolves.toBeUndefined();
+  });
+
+  it('rows without a usable id are ignored without throwing', async () => {
+    await expect(
+      applyRemoteChange('students', 'INSERT', null, null)
+    ).resolves.toBeUndefined();
+    await expect(
+      applyRemoteChange('students', 'INSERT', { no_id: true }, null)
+    ).resolves.toBeUndefined();
   });
 });

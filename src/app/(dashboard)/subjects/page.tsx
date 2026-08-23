@@ -6,8 +6,9 @@ import { getSubjects, createSubject, deleteSubject, updateSubject } from '@/lib/
 import { getUserSections } from '@/lib/db/user-sections';
 import { logActivity } from '@/lib/db/activity';
 import { db } from '@/lib/db/index';
-import { pullFromCloud } from '@/lib/db/sync';
-import { subscribeToSubjects } from '@/lib/supabase/realtime';
+import { applyRemoteChange } from '@/lib/db/sync';
+import { subscribeToSubjects, REALTIME_REFRESH_DEBOUNCE_MS } from '@/lib/supabase/realtime';
+import { debounce } from '@/lib/utils/debounce';
 import { subjectSchema } from '@/lib/utils/validation';
 import { getDepartments, getSections } from '@/lib/db/university';
 import type { Subject, Section, Department } from '@/lib/types';
@@ -145,14 +146,21 @@ export default function SubjectsPage() {
   useEffect(() => {
     if (!university) return;
 
-    // Subscribe to subjects changes (admin can see all)
-    const channel = subscribeToSubjects('*', async () => {
-      await pullFromCloud(university.id);
-      await loadData();
+    // Subscribe to subjects changes (admin can see all). Realtime events
+    // apply their changed row directly into Dexie and debounce the local
+    // re-read — never a full pullFromCloud (F-019).
+    const refresh = debounce(() => {
+      void loadData();
+    }, REALTIME_REFRESH_DEBOUNCE_MS);
+
+    const channel = subscribeToSubjects('*', (payload) => {
+      void applyRemoteChange('subjects', payload.eventType, payload.new as any, payload.old as any);
+      refresh();
     });
 
     return () => {
       channel.unsubscribe();
+      refresh.cancel();
     };
   }, [university, loadData]);
 
