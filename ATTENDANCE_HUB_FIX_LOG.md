@@ -17,7 +17,7 @@ Source of truth for *how it's being fixed*: this file.
 | 7 | Data Integrity & Write Concurrency | Complete | 2026-08-23 | 2bc80a8 |
 | 8 | Import/Export Robustness | Complete | 2026-08-23 | 8287f95 |
 | 9 | Input Validation & Error Honesty | Complete | 2026-08-23 | 0bb778d |
-| 10 | README/Docs Claims vs Measured Behavior (High) | Not started | | |
+| 10 | README/Docs Claims vs Measured Behavior (High) | Complete | 2026-08-23 | (see commit) |
 | 11 | Query Performance & Scalability | Not started | | |
 | 12 | Frontend Accessibility I | Not started | | |
 | 13 | Frontend Accessibility II + UX Honesty | Not started | | |
@@ -506,4 +506,30 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Full verification result (Step 7)**: identical to F-024 entry — all four gates green (lint 17-warning baseline / tsc clean / 185 tests / build unchanged).
 - **Interactions with prior fixes**: Phase-3 guard order (authorization before validation) preserved and re-verified; Phase-2's original validation tests remain green unchanged except additions.
 - **Residual risk / follow-ups**: password complexity (beyond length bounds) remains a product decision, deliberately not invented here; other server actions (`restoreUniversityData` etc.) operate on structured backup JSON whose shape validation belongs to backup-integrity scope (Phase 15); department/admin/teacher client forms define their own local zod extensions that now compose with the refined base schemas.
+- **Commit**: see tracker.
+
+## Phase 10 Notes
+
+- Scope: protocol §4.2 — reconcile `README.md` and any docs against freshly verified behavior. The only user-facing doc in the repo is `README.md` (glob-verified: no other *.md besides the three effort files; no docs/ directory). No numbered findings are assigned to this phase (Finding-to-Phase Map), so the sweep covered every concrete claim in the README.
+- No scope creep: unused dependencies (`xlsx`, `@google/generative-ai` — F-028) were NOT removed here (Phase 20 owns them); this phase only corrected the README's *claims* about them.
+
+### [PHASE 10] README/Docs Claims vs Measured Behavior — Complete
+
+- **Original severity**: High arc (doc contradictions), per protocol §4.2
+- **Phase**: 10 — README/Docs Claims vs Measured Behavior
+- **Files changed**: `README.md` (4 claim corrections), `LICENSE` (new — see below)
+- **Re-verification / claim-by-claim audit (Steps 1–3)**: every README claim checked against measured code behavior:
+  - "Export … Excel/CSV formats using SheetJS & Papaparse" — FALSE. Grep-verified zero imports of `xlsx`/SheetJS anywhere in `src/` (matches F-028). Real export surface measured: PDF via `@react-pdf/renderer` (`src/lib/utils/pdf-generator.ts`, dynamic imports at lines 59/309/583, consumed by `/export` page), CSV via papaparse (`csv-export.ts`, `csv-import.ts`), JSON backup packaged with JSZip (`backup/page.tsx:26`). README corrected accordingly. The PDF half of the original claim was accurate and kept.
+  - "[Shadcn UI]" in Tech Stack → UI & UX section — FALSE. All primitives in `src/components/ui/*` wrap `@base-ui/react` (`button.tsx:4`, `dialog.tsx:4`, `select.tsx:4`, etc.; grep found 15+ Base UI primitive imports, zero Radix). Corrected to Base UI with its real URL.
+  - "Zod validation completely mitigates SQL injection and XSS vulnerabilities" — FALSE overclaim. Zod provides input validation only; XSS mitigation is a rendering/escaping concern zod does not provide, and SQLi prevention comes from PostgREST's parameterized queries, not zod. Replaced with an accurate description of the actual layered behavior (TS end-to-end; shared Zod schemas enforced client-side AND re-validated inside server actions post-F-029; PostgREST parameterization; RLS constraining every query).
+  - License section referenced `LICENSE` "for more information" but **no LICENSE file existed** (Test-Path false for LICENSE/LICENSE.md). Rather than weakening the repo's stated MIT intent, added a standard MIT `LICENSE` file so the documented claim becomes true.
+  - Prerequisites "Node.js v18.0.0 or higher" — imprecise; Next.js 14 requires ≥ 18.17.0. Corrected to v18.17.0+.
+  - Claims verified ACCURATE and left untouched: Next.js 14 / React 18 / TS / Supabase / Tailwind badges (package.json versions match); Zustand + Dexie offline support; React Hook Form + Zod; RLS architecture bullet (accurate post-Phase-4); server-side API-key isolation (re-verified via Phase 5 evidence: no NEXT_PUBLIC_ prefix on service key, all importers of `@/lib/supabase/admin` are `'use server'` files); `@supabase/ssr` HTTP-only cookie auth (middleware.ts:3, client.ts:1, server-auth.ts:2); env-var setup section (Phase 5); Running Tests section (Phase 2 commands verified against package.json scripts); marketing puffery ("Lightning Fast", "Enterprise-Grade") kept as non-factual styling.
+- **Edge cases enumerated (Step 3)**: corrected text must not create NEW overclaims (each replacement worded to exactly the measured surface); PDF claim kept since dynamic imports are real usage (initial naive static-import grep missed them — caught by follow-up pattern search, a good reminder that "zero imports" claims need multiple probes); LICENSE copyright holder set to project contributors (no author metadata exists in-repo to name a person/org — flagged below as user-adjustable); Node floor chosen from Next.js 14's official requirement, not invented; no other doc surfaces exist to drift.
+- **Fix design considered (Step 4)**: (a) delete/weaken the license claim instead of adding a file — rejected: README asserts MIT distribution; making reality match the documented intent is the honest reconciliation; (b) minimal wording corrections matched precisely to measured behavior — chosen throughout.
+- **Fix applied (Step 5)**: four README edits + new MIT `LICENSE` file, as itemized above.
+- **Tests added/modified (Step 6)**: none — N/A per Rule 6 justification: pure documentation + license-file changes with zero executable behavior to assert; automated coverage would be tautological string-matching against itself. Manual verification performed instead: each corrected claim re-checked against the cited source files/lines listed above.
+- **Full verification result (Step 7)**: `pnpm run lint` EXIT=0 (**17 warnings = exact Phase 0 baseline**, 0 errors); `pnpm exec tsc --noEmit` EXIT=0 clean; `pnpm run test` EXIT=0 (21 files / 185 tests passed); `pnpm run build` EXIT=0 (24 routes, middleware 75.3 kB, shared JS 87.7 kB — unchanged).
+- **Interactions with prior fixes**: Phase 5's env-var documentation and Phase 2's test instructions in the README re-read and confirmed still accurate; Phase 9's server-side zod enforcement is what makes the rewritten validation-security bullet true.
+- **Residual risk / follow-ups**: `xlsx@^0.18.5` and `@google/generative-ai` remain installed-but-unused (F-028, scheduled Phase 20 removal — the README no longer advertises them, closing the doc-level harm now); LICENSE copyright line uses "Attendance Hub Contributors" — adjust to a legal entity if desired (cosmetic); remaining lint warnings untouched (F-030, Phase 19–20).
 - **Commit**: see tracker.

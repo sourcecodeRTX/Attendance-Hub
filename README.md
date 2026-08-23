@@ -34,7 +34,7 @@
 - 👥 **Advanced Attendance Tracking**: Effortlessly manage, monitor, and record daily attendance with a highly intuitive user interface.
 - 🔐 **Enterprise-Grade Security**: Secure authentication, authorization, and data encryption using Supabase's powerful infrastructure.
 - 📶 **Robust Offline Support**: Continue working even without internet access. Data is synced automatically via IndexedDB using Dexie.js.
-- 📄 **Dynamic Document Generation**: Export critical data into PDF formats via React-PDF or Excel/CSV formats using SheetJS & Papaparse.
+- 📄 **Dynamic Document Generation**: Export reports to PDF via React-PDF, exchange data as CSV via Papaparse, and take full JSON backups packaged with JSZip.
 - 🎨 **Sleek, Modern UI/UX**: Designed with beautiful components from Shadcn UI, fully responsive Tailwind CSS layouts, and elegant animations.
 - ⚡ **Lightning Fast Performance**: Leverages Next.js App Router for optimal rendering, fast load times, and improved SEO.
 
@@ -51,7 +51,7 @@
 - **[Dexie.js](https://dexie.org/)** - A minimalist wrapper for IndexedDB for offline data persistence.
 
 ### UI & UX
-- **[Shadcn UI](https://ui.shadcn.com/)** - Beautifully designed, accessible components.
+- **[Base UI](https://base-ui.com/)** - Beautifully designed, accessible component primitives.
 - **[Lucide React](https://lucide.dev/)** - Beautiful & consistent icon toolkit.
 - **React Hook Form & [Zod](https://zod.dev/)** - Robust form handling and schema-based validation.
 
@@ -61,7 +61,7 @@ Security is built into the core of Attendance Hub to ensure your organization's 
 
 - **Row Level Security (RLS)**: Strict Supabase database policies ensure users can only access and manipulate data they are explicitly authorized to see.
 - **Server-Side Rendering (SSR) & Server Actions**: Sensitive operations and API keys are kept safely on the server and are never exposed to the client browser.
-- **Strict Data Validation**: End-to-end type safety using TypeScript combined with Zod validation completely mitigates SQL injection and XSS vulnerabilities.
+- **Strict Data Validation**: End-to-end type safety with TypeScript, plus shared Zod schemas enforced on the client and re-validated inside server actions before any database write. All database access flows through Supabase's PostgREST API (parameterized queries), and Row Level Security constrains every query at the database level.
 - **Secure Authentication**: Leveraging `@supabase/ssr` for managing highly secure HTTP-only cookies and user sessions.
 
 ## 🚀 Getting Started
@@ -71,7 +71,7 @@ Follow these steps to set up the project locally on your machine.
 ### Prerequisites
 
 Ensure you have the following installed:
-- Node.js (v18.0.0 or higher)
+- Node.js (v18.17.0 or higher — required by Next.js 14)
 - [pnpm](https://pnpm.io/) (Recommended package manager)
 - A [Supabase](https://supabase.com/) account and project
 
