@@ -92,9 +92,10 @@ export default function TeachersPage() {
 
   // Edit role state
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editingTeacher, setEditingTeacher] = useState<User | null>(null);
-  const [editRole, setEditRole] = useState<'primary_teacher' | 'regular_teacher'>('regular_teacher');
-  const [editSubmitting, setEditSubmitting] = useState(false);
+const [editingTeacher, setEditingTeacher] = useState<User | null>(null);
+const [editRole, setEditRole] = useState<'primary_teacher' | 'regular_teacher'>('regular_teacher');
+const [editSubmitting, setEditSubmitting] = useState(false);
+const [demotionAcknowledged, setDemotionAcknowledged] = useState(false);
 
   const [removeAssignmentState, setRemoveAssignmentState] = useState<UserSubject | null>(null);
   const [removeAssignmentSubmitting, setRemoveAssignmentSubmitting] = useState(false);
@@ -473,13 +474,21 @@ export default function TeachersPage() {
   const handleOpenEditDialog = (teacher: User) => {
     setEditingTeacher(teacher);
     setEditRole(teacher.role as 'primary_teacher' | 'regular_teacher');
+    setDemotionAcknowledged(false);
     setIsEditOpen(true);
   };
 
-  const handleEditTeacherRole = async () => {
+  async function handleEditTeacherRole() {
     if (!user || !university || !editingTeacher) return;
     if (editRole === editingTeacher.role) {
       setIsEditOpen(false);
+      return;
+    }
+    if (
+      editingTeacher.role === 'primary_teacher' &&
+      editRole === 'regular_teacher' &&
+      !demotionAcknowledged
+    ) {
       return;
     }
 
@@ -816,7 +825,11 @@ export default function TeachersPage() {
             {/* Current Assignments List */}
             <div className="space-y-3">
               <h2 className="text-sm font-medium">Current Assignments</h2>
-              {currentAssignments.length === 0 ? (
+              {loading ? (
+                <div className="py-6 text-center text-muted-foreground">
+                  Loading assignments...
+                </div>
+              ) : currentAssignments.length === 0 ? (
                 <div className="py-6 text-center text-muted-foreground">
                   No subject assignments yet
                 </div>
@@ -1024,20 +1037,27 @@ export default function TeachersPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+      <Dialog
+        open={isEditOpen}
+        onOpenChange={(open) => {
+          setIsEditOpen(open);
+          if (!open) setDemotionAcknowledged(false);
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Teacher Role</DialogTitle>
             <DialogDescription>
               Change the role for {editingTeacher?.fullName}.
-              {editingTeacher?.role === 'primary_teacher' && editRole === 'regular_teacher' && (
-                <span className="mt-2 block text-amber-600 dark:text-amber-500">
-                  Warning: Changing to Regular Teacher will remove all section assignments.
-                </span>
-              )}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleEditTeacherRole();
+            }}
+            className="space-y-4"
+          >
             <div className="space-y-1.5">
               <div className="flex items-center gap-1">
                 <Label htmlFor="edit-teacher-role">Role</Label>
@@ -1045,7 +1065,10 @@ export default function TeachersPage() {
               </div>
               <Select
                 value={editRole}
-                onValueChange={(val) => setEditRole(val as 'primary_teacher' | 'regular_teacher')}
+                onValueChange={(val) => {
+                  setEditRole(val as 'primary_teacher' | 'regular_teacher');
+                  setDemotionAcknowledged(false);
+                }}
               >
                 <SelectTrigger id="edit-teacher-role" className="w-full">
                   <SelectValue placeholder="Select role" />
@@ -1065,22 +1088,46 @@ export default function TeachersPage() {
                 After changing to Primary Teacher, you will need to assign them to sections separately.
               </p>
             )}
-          </div>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => setIsEditOpen(false)}
-              disabled={editSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleEditTeacherRole} 
-              disabled={editSubmitting || editRole === editingTeacher?.role}
-            >
-              {editSubmitting ? 'Updating...' : 'Update Role'}
-            </Button>
-          </DialogFooter>
+            {editingTeacher?.role === 'primary_teacher' && editRole === 'regular_teacher' && (
+              <div className="rounded-md border border-amber-500/50 bg-amber-500/5 p-3">
+                <p className="mb-2 text-sm text-amber-600 dark:text-amber-500">
+                  Changing to Regular Teacher will permanently remove all of this
+                  teacher&apos;s section assignments. This cannot be undone from here.
+                </p>
+                <label className="flex items-start gap-2 text-sm font-medium">
+                  <Checkbox
+                    checked={demotionAcknowledged}
+                    onCheckedChange={(checked) => setDemotionAcknowledged(checked === true)}
+                  />
+                  <span>
+                    I understand all section assignments will be removed
+                  </span>
+                </label>
+              </div>
+            )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditOpen(false)}
+                disabled={editSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={
+                  editSubmitting ||
+                  editRole === editingTeacher?.role ||
+                  (editingTeacher?.role === 'primary_teacher' &&
+                    editRole === 'regular_teacher' &&
+                    !demotionAcknowledged)
+                }
+              >
+                {editSubmitting ? 'Updating...' : 'Update Role'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

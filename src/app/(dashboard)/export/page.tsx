@@ -124,6 +124,7 @@ export default function ExportPage() {
         setSections(allSections.filter((s) => s.isActive && !s.isArchived));
       } catch (err) {
         console.error('Failed to load sections:', err);
+        toast.error('Failed to load sections for this department');
       }
     }
 

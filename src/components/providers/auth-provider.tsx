@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { useAuthStore, clearAllPersistedStores } from '@/lib/stores/auth-store';
 import { useUIStore } from '@/lib/stores/ui-store';
@@ -28,6 +29,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       stopSyncLoop();
       clearAuth();
       setCurrentUid(null);
+      // Explain the forced sign-out — a silent bounce to /login reads like a
+      // random logout with no cause (UX honesty, F-024 arc).
+      toast.error('Your session could not be verified. Please sign in again.');
       try {
         await supabase.auth.signOut();
       } catch (signOutError) {

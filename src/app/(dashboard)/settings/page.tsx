@@ -30,21 +30,31 @@ export default function SettingsPage() {
     university?.attendanceThreshold ?? 75
   );
   const [saving, setSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   const isSuperAdmin = user?.role === 'super_admin';
 
   async function handleSaveUniversitySettings() {
-    if (!university) return;
+    if (!university) {
+      toast.error('No university is loaded — settings cannot be saved.');
+      return;
+    }
 
     if (!uniName.trim() || !uniCode.trim()) {
-      toast.error('University name and code are required');
+      const message = !uniName.trim() && !uniCode.trim()
+        ? 'University name and code are both required'
+        : !uniName.trim()
+          ? 'University name is required'
+          : 'University code is required';
+      setSettingsError(message);
       return;
     }
 
-    if (threshold < 1 || threshold > 100) {
-      toast.error('Threshold must be between 1 and 100');
+    if (!Number.isFinite(threshold) || threshold < 1 || threshold > 100) {
+      setSettingsError('Threshold must be a number between 1 and 100');
       return;
     }
+    setSettingsError(null);
 
     setSaving(true);
     try {
@@ -132,13 +142,26 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveUniversitySettings();
+              }}
+              className="space-y-4"
+              noValidate
+            >
             <div className="space-y-1.5">
               <Label htmlFor="uni-name">University Name</Label>
               <Input
                 id="uni-name"
                 value={uniName}
-                onChange={(e) => setUniName(e.target.value)}
+                onChange={(e) => {
+                  setUniName(e.target.value);
+                  if (settingsError) setSettingsError(null);
+                }}
                 placeholder="University name"
+                aria-invalid={!!settingsError}
+                aria-describedby={settingsError ? 'university-settings-error' : undefined}
               />
             </div>
             <div className="space-y-1.5">
@@ -146,8 +169,13 @@ export default function SettingsPage() {
               <Input
                 id="uni-code"
                 value={uniCode}
-                onChange={(e) => setUniCode(e.target.value)}
+                onChange={(e) => {
+                  setUniCode(e.target.value);
+                  if (settingsError) setSettingsError(null);
+                }}
                 placeholder="University code"
+                aria-invalid={!!settingsError}
+                aria-describedby={settingsError ? 'university-settings-error' : undefined}
               />
             </div>
             <div className="space-y-1.5">
@@ -161,20 +189,31 @@ export default function SettingsPage() {
                 min={1}
                 max={100}
                 value={threshold}
-                onChange={(e) => setThreshold(Number(e.target.value))}
+                onChange={(e) => {
+                  setThreshold(e.target.value === '' ? NaN : Number(e.target.value));
+                  if (settingsError) setSettingsError(null);
+                }}
+                aria-invalid={!!settingsError}
+                aria-describedby={settingsError ? 'university-settings-error' : undefined}
               />
               <p className="text-xs text-muted-foreground">
                 Students below this percentage will be flagged as at-risk
               </p>
             </div>
+            {settingsError && (
+              <p id="university-settings-error" role="alert" className="text-xs text-destructive">
+                {settingsError}
+              </p>
+            )}
             <Button
-              onClick={handleSaveUniversitySettings}
+              type="submit"
               disabled={saving}
               className="w-full sm:w-auto"
             >
               {saving && <Loader2 className="size-4 animate-spin" />}
               Save Settings
             </Button>
+            </form>
           </CardContent>
         </Card>
       )}

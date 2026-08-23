@@ -480,7 +480,13 @@ export default function SubjectsPage() {
               Add a new subject and assign it to sections.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateSubject();
+            }}
+            className="space-y-3"
+          >
             <div className="space-y-1.5">
               <Label htmlFor="subject-name">Subject Name</Label>
               <Input
@@ -563,14 +569,14 @@ export default function SubjectsPage() {
                 )}
               </div>
             )}
-          </div>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-            <Button onClick={handleCreateSubject} disabled={createSubmitting}>
-              {createSubmitting && <Loader2 className="size-4 animate-spin" />}
-              Create Subject
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+              <Button type="submit" disabled={createSubmitting}>
+                {createSubmitting && <Loader2 className="size-4 animate-spin" />}
+                Create Subject
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -595,7 +601,13 @@ export default function SubjectsPage() {
               Update subject details and section assignments.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleEditSubject();
+            }}
+            className="space-y-3"
+          >
             <div className="space-y-1.5">
               <Label htmlFor="edit-subject-name">Subject Name</Label>
               <Input
@@ -654,14 +666,14 @@ export default function SubjectsPage() {
                 <p id="edit-sections-error" role="alert" className="text-xs text-destructive">{editErrors.sections}</p>
               )}
             </div>
-          </div>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-            <Button onClick={handleEditSubject} disabled={editSubmitting}>
-              {editSubmitting && <Loader2 className="size-4 animate-spin" />}
-              Save Changes
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+              <Button type="submit" disabled={editSubmitting}>
+                {editSubmitting && <Loader2 className="size-4 animate-spin" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -693,33 +705,41 @@ export default function SubjectsPage() {
               associated with it.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5">
-            <Label htmlFor="delete-confirm">
-              Type{' '}
-              <span className="font-semibold">{deleteSubjectState?.name}</span>{' '}
-              to confirm
-            </Label>
-            <Input
-              id="delete-confirm"
-              value={deleteConfirmText}
-              onChange={(e) => setDeleteConfirmText(e.target.value)}
-              placeholder={deleteSubjectState?.name}
-            />
-          </div>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteSubject}
-              disabled={
-                deleteSubmitting ||
-                deleteConfirmText !== deleteSubjectState?.name
-              }
-            >
-              {deleteSubmitting && <Loader2 className="size-4 animate-spin" />}
-              Delete Subject
-            </Button>
-          </DialogFooter>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleDeleteSubject();
+            }}
+            className="space-y-1.5"
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="delete-confirm">
+                Type{' '}
+                <span className="font-semibold">{deleteSubjectState?.name}</span>{' '}
+                to confirm
+              </Label>
+              <Input
+                id="delete-confirm"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder={deleteSubjectState?.name}
+              />
+            </div>
+            <DialogFooter className="pt-3">
+              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+              <Button
+                variant="destructive"
+                type="submit"
+                disabled={
+                  deleteSubmitting ||
+                  deleteConfirmText !== deleteSubjectState?.name
+                }
+              >
+                {deleteSubmitting && <Loader2 className="size-4 animate-spin" />}
+                Delete Subject
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

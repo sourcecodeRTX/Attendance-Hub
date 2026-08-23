@@ -48,6 +48,7 @@ export default function CRManagementPage() {
   const [createName, setCreateName] = useState('');
   const [createEmail, setCreateEmail] = useState('');
   const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const [credentialsOpen, setCredentialsOpen] = useState(false);
   const [tempCredentials, setTempCredentials] = useState({ email: '', password: '' });
@@ -110,9 +111,15 @@ export default function CRManagementPage() {
     if (!user || !university || !section) return;
 
     if (!createName.trim() || !createEmail.trim()) {
-      toast.error('Name and email are required');
+      const message = !createName.trim() && !createEmail.trim()
+        ? 'Full name and email are both required'
+        : !createName.trim()
+          ? 'Full name is required'
+          : 'Email is required';
+      setCreateError(message);
       return;
     }
+    setCreateError(null);
 
     setCreateSubmitting(true);
     try {
@@ -149,23 +156,58 @@ export default function CRManagementPage() {
 
       // Insert profile directly into Supabase so the CR can log in
       // immediately (the sync queue is async and may not have run yet).
-      const profileResult = await createManagedUserProfile({
-        id: newUserId,
-        university_id: university.id,
-        role: 'cr',
-        full_name: newUser.fullName,
-        staff_id: newUser.staffId,
-        email: newUser.email,
-        department_id: section.departmentId,
-        is_active: true,
-        must_change_password: true,
-        created_at: newUser.createdAt,
-        created_by: user.id,
-      });
+      let profilePushed = false;
+      let profilePushError: unknown = null;
+      try {
+        const profileResult = await createManagedUserProfile({
+          id: newUserId,
+          university_id: university.id,
+          role: 'cr',
+          full_name: newUser.fullName,
+          staff_id: newUser.staffId,
+          email: newUser.email,
+          department_id: section.departmentId,
+          is_active: true,
+          must_change_password: true,
+          created_at: newUser.createdAt,
+          created_by: user.id,
+        });
+        profilePushed = !!profileResult.success;
+        if (!profileResult.success) profilePushError = profileResult.error;
+      } catch (pushErr) {
+        profilePushError = pushErr;
+      }
 
-      if (!profileResult.success) {
-        console.error('Failed to push CR profile to Supabase:', profileResult.error);
-        // Don't block — the sync queue will eventually push it
+      if (!profilePushed) {
+        // The direct push failed — make the previously-imagined safety net
+        // real by queueing the full profile row for the offline-first
+        // chunked upsert, and tell the user the truth about sync state.
+        console.error('Failed to push CR profile to Supabase:', profilePushError);
+        await db.transaction('rw', [db.users, db.syncQueue], async () => {
+          await db.users.put(newUser);
+          await db.syncQueue.add({
+            universityId: university.id,
+            ownerId: user.id,
+            type: 'update',
+            collection: 'users',
+            docId: newUserId,
+            data: {
+              id: newUserId,
+              university_id: university.id,
+              role: 'cr',
+              full_name: newUser.fullName,
+              staff_id: newUser.staffId,
+              email: newUser.email,
+              department_id: section.departmentId,
+              is_active: true,
+              must_change_password: true,
+              created_at: newUser.createdAt,
+              created_by: user.id,
+            },
+            createdAt: new Date().toISOString(),
+            retryCount: 0,
+          });
+        });
       }
 
       const userSection: UserSection = {
@@ -195,7 +237,11 @@ export default function CRManagementPage() {
       setCreateName('');
       setCreateEmail('');
       setCredentialsOpen(true);
-      toast.success('CR account created');
+      if (profilePushed) {
+        toast.success('CR account created');
+      } else {
+        toast.warning('CR account created locally — it will sync to the cloud automatically.');
+      }
       loadData();
     } catch (_err) {
       toast.error('Failed to create CR');
@@ -402,6 +448,7 @@ export default function CRManagementPage() {
           if (!open) {
             setCreateName('');
             setCreateEmail('');
+            setCreateError(null);
           }
         }}
       >
@@ -413,14 +460,26 @@ export default function CRManagementPage() {
               The initial temporary password will be generated automatically.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateCR();
+            }}
+            className="space-y-3"
+            noValidate
+          >
             <div className="space-y-1.5">
               <Label htmlFor="cr-name">Full Name</Label>
               <Input
                 id="cr-name"
                 value={createName}
-                onChange={(e) => setCreateName(e.target.value)}
+                onChange={(e) => {
+                  setCreateName(e.target.value);
+                  if (createError) setCreateError(null);
+                }}
                 placeholder="e.g. Jane Smith"
+                aria-invalid={!!createError}
+                aria-describedby={createError ? 'create-cr-error' : undefined}
               />
             </div>
             <div className="space-y-1.5">
@@ -429,18 +488,28 @@ export default function CRManagementPage() {
                 id="cr-email"
                 type="email"
                 value={createEmail}
-                onChange={(e) => setCreateEmail(e.target.value)}
+                onChange={(e) => {
+                  setCreateEmail(e.target.value);
+                  if (createError) setCreateError(null);
+                }}
                 placeholder="e.g. jane@university.edu"
+                aria-invalid={!!createError}
+                aria-describedby={createError ? 'create-cr-error' : undefined}
               />
             </div>
-          </div>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-            <Button onClick={handleCreateCR} disabled={createSubmitting}>
-              {createSubmitting && <Loader2 className="size-4 animate-spin" />}
-              Create CR
-            </Button>
-          </DialogFooter>
+            {createError && (
+              <p id="create-cr-error" role="alert" className="text-xs text-destructive">
+                {createError}
+              </p>
+            )}
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+              <Button type="submit" disabled={createSubmitting}>
+                {createSubmitting && <Loader2 className="size-4 animate-spin" />}
+                Create CR
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

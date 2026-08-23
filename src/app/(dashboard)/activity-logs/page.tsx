@@ -149,6 +149,7 @@ export default function ActivityLogsPage() {
   const [deleteTimeframe, setDeleteTimeframe] = useState<DeleteLogsTimeframe>('7days');
   const [logsToDeleteCount, setLogsToDeleteCount] = useState<number>(0);
   const [isCountingLogs, setIsCountingLogs] = useState(false);
+  const [countFailed, setCountFailed] = useState(false);
 
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -178,9 +179,12 @@ export default function ActivityLogsPage() {
         }
       } catch (err) {
         console.error('Failed to load log settings:', err);
+        toast.warning("Couldn't load your saved retention settings - the panel below shows defaults until they load.", {
+          id: 'activity-log-settings-stale',
+        });
       }
     }
-    
+
     loadSettings();
   }, [university, isSuperAdmin]);
 
@@ -195,6 +199,7 @@ export default function ActivityLogsPage() {
         setDepartments(depts);
       } catch (err) {
         console.error('Failed to load departments:', err);
+        toast.error('Failed to load departments for the filter');
       }
     }
 
@@ -375,12 +380,14 @@ export default function ActivityLogsPage() {
     
     setDeleteTimeframe(timeframe);
     setIsCountingLogs(true);
+    setCountFailed(false);
     try {
       const count = await countLogsToDelete(university.id, timeframe);
       setLogsToDeleteCount(count);
     } catch (error) {
       console.error('Failed to count logs:', error);
       setLogsToDeleteCount(0);
+      setCountFailed(true);
     } finally {
       setIsCountingLogs(false);
     }
@@ -572,6 +579,10 @@ export default function ActivityLogsPage() {
                     <span className="text-sm text-muted-foreground flex items-center gap-1.5">
                       <Loader2 className="size-3 animate-spin" />
                       Counting...
+                    </span>
+                  ) : countFailed ? (
+                    <span role="status" className="text-sm text-destructive">
+                      Couldn&apos;t determine how many logs match — the deletion below will use the live count.
                     </span>
                   ) : logsToDeleteCount > 0 ? (
                     <Badge variant="secondary" className="text-sm">

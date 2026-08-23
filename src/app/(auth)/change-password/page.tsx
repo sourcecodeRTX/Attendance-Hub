@@ -55,6 +55,7 @@ export default function ChangePasswordPage() {
           }
         }
       } catch {
+        toast.error('Could not verify your session. Please sign in and try again.');
         router.push('/login');
       } finally {
         setCheckingAuth(false);

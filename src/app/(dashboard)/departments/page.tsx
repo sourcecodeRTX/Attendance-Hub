@@ -117,10 +117,15 @@ export default function DepartmentsPage() {
         .eq('university_id', university.id);
 
       let universityUsers: User[];
-      
+
       if (usersError) {
-        // Fallback to local database if Supabase fails
+        // Fallback to local database if Supabase fails — but say so, so a
+        // stale admin list is never mistaken for fresh data (F-024 pattern).
+        console.error('Users query failed, showing cached admin list:', usersError);
         universityUsers = await db.users.where('universityId').equals(university.id).toArray();
+        toast.warning("Couldn't reach the cloud - showing the saved admin list", {
+          id: 'departments-stale-users',
+        });
       } else {
         universityUsers = (userRows ?? []).map((row) => ({
           id: row.id,

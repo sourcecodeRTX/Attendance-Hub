@@ -150,6 +150,17 @@ export default function AttendancePage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showEditConfirmation, setShowEditConfirmation] = useState(false);
+  const [pendingSubjectValue, setPendingSubjectValue] = useState<string | null>(null);
+
+  function applySubjectSwitch(val: string) {
+    setSelectedDropdownValue(val);
+    const [subId, secId] = val.split('|');
+    setSelectedSubjectId(subId);
+    setUserSectionId(secId);
+    setActiveSessionId(null);
+    setIsNewSession(false);
+    setViewingHistorySession(null);
+  }
 
   // ---- history ----
   const [historySessions, setHistorySessions] = useState<AttendanceSession[]>(
@@ -207,6 +218,10 @@ export default function AttendancePage() {
           await pullFromCloud(university!.id);
         } catch (pullErr) {
           console.warn('Cloud pull failed, using local data:', pullErr);
+          toast.warning("Couldn't reach the cloud - showing saved attendance data", {
+            id: 'attendance-stale-cache',
+            description: 'Saved marks are shown from this device. Anything you save will sync to the cloud once the connection is restored.',
+          });
         }
 
         const allSections = await getSections(university!.id);
@@ -837,18 +852,13 @@ export default function AttendancePage() {
                 onValueChange={(val: string | null) => {
                   if (!val) return;
                   if (hasUnsavedChanges) {
-                    const ok = window.confirm(
-                      'You have unsaved changes. Switch subject anyway?',
-                    );
-                    if (!ok) return;
+                    // Defer the switch behind an explicit styled confirmation
+                    // instead of a blocking native confirm() so keyboard and
+                    // automation users get the same, stylable flow.
+                    setPendingSubjectValue(val);
+                    return;
                   }
-                  setSelectedDropdownValue(val);
-                  const [subId, secId] = val.split('|');
-                  setSelectedSubjectId(subId);
-                  setUserSectionId(secId);
-                  setActiveSessionId(null);
-                  setIsNewSession(false);
-                  setViewingHistorySession(null);
+                  applySubjectSwitch(val);
                 }}
               >
                 <SelectTrigger id="attendance-subject" className="w-full">
@@ -1117,6 +1127,39 @@ export default function AttendancePage() {
           </p>
         </div>
       )}
+
+      {/* Unsaved-changes subject-switch confirmation (replaces native confirm) */}
+      <Dialog
+        open={pendingSubjectValue !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingSubjectValue(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Discard unsaved changes?</DialogTitle>
+            <DialogDescription>
+              You have attendance marks that have not been saved. Switching
+              subjects now will discard them.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              Keep editing
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                const val = pendingSubjectValue;
+                setPendingSubjectValue(null);
+                if (val) applySubjectSwitch(val);
+              }}
+            >
+              Discard &amp; switch
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

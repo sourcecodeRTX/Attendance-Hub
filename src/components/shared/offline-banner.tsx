@@ -59,7 +59,7 @@ export function OfflineBanner() {
   if (!isOffline) return null;
 
   return (
-    <div className="sticky top-0 z-50 bg-amber-500 px-4 py-2 text-center text-sm font-medium text-white">
+    <div role="status" className="sticky top-0 z-50 bg-amber-500 px-4 py-2 text-center text-sm font-medium text-white">
       <WifiOff className="mr-2 inline-block h-4 w-4" />
       You are offline. Changes will sync when you reconnect.
       {showExpiryWarning && ' Your session will expire soon. Go online to stay logged in.'}

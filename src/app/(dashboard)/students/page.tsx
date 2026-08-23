@@ -82,6 +82,7 @@ export default function StudentsPage() {
   const [addRoll, setAddRoll] = useState('');
   const [addName, setAddName] = useState('');
   const [addSubmitting, setAddSubmitting] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
   const [actionSectionId, setActionSectionId] = useState('');
 
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -96,6 +97,7 @@ export default function StudentsPage() {
   const [editRoll, setEditRoll] = useState('');
   const [editName, setEditName] = useState('');
   const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteStudent, setDeleteStudent] = useState<Student | null>(null);
@@ -297,9 +299,15 @@ export default function StudentsPage() {
       return;
     }
     if (!addRoll.trim() || !addName.trim()) {
-      toast.error('Both fields are required');
+      const message = !addRoll.trim() && !addName.trim()
+        ? 'Roll number and full name are both required'
+        : !addRoll.trim()
+          ? 'Roll number is required'
+          : 'Full name is required';
+      setAddError(message);
       return;
     }
+    setAddError(null);
     setAddSubmitting(true);
     try {
       const student: Student = {
@@ -429,15 +437,22 @@ export default function StudentsPage() {
     setEditStudent(student);
     setEditRoll(student.rollNumber);
     setEditName(student.fullName);
+    setEditError(null);
     setEditOpen(true);
   }
 
   async function handleEditStudent() {
     if (!user || !university || !editStudent) return;
     if (!editRoll.trim() || !editName.trim()) {
-      toast.error('Both fields are required');
+      const message = !editRoll.trim() && !editName.trim()
+        ? 'Roll number and full name are both required'
+        : !editRoll.trim()
+          ? 'Roll number is required'
+          : 'Full name is required';
+      setEditError(message);
       return;
     }
+    setEditError(null);
     setEditSubmitting(true);
     try {
       const updated: Student = {
@@ -780,7 +795,13 @@ export default function StudentsPage() {
       )}
 
       {/* Add Student Dialog */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+      <Dialog
+        open={addOpen}
+        onOpenChange={(open) => {
+          setAddOpen(open);
+          if (!open) setAddError(null);
+        }}
+      >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Add Student</DialogTitle>
@@ -788,7 +809,14 @@ export default function StudentsPage() {
               Add a new student to {primarySection?.name ?? 'your section'}.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleAddStudent();
+            }}
+            className="space-y-3"
+            noValidate
+          >
             <div className="space-y-1.5">
               <Label htmlFor="add-target-section">Target Section</Label>
               <Select
@@ -810,8 +838,13 @@ export default function StudentsPage() {
               <Input
                 id="add-roll"
                 value={addRoll}
-                onChange={(e) => setAddRoll(e.target.value)}
+                onChange={(e) => {
+                  setAddRoll(e.target.value);
+                  if (addError) setAddError(null);
+                }}
                 placeholder="e.g. 2024CS001"
+                aria-invalid={!!addError}
+                aria-describedby={addError ? 'add-student-error' : undefined}
               />
             </div>
             <div className="space-y-1.5">
@@ -819,18 +852,28 @@ export default function StudentsPage() {
               <Input
                 id="add-name"
                 value={addName}
-                onChange={(e) => setAddName(e.target.value)}
+                onChange={(e) => {
+                  setAddName(e.target.value);
+                  if (addError) setAddError(null);
+                }}
                 placeholder="e.g. John Doe"
+                aria-invalid={!!addError}
+                aria-describedby={addError ? 'add-student-error' : undefined}
               />
             </div>
-          </div>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-            <Button onClick={handleAddStudent} disabled={addSubmitting}>
-              {addSubmitting && <Loader2 className="size-4 animate-spin" />}
-              Add Student
-            </Button>
-          </DialogFooter>
+            {addError && (
+              <p id="add-student-error" role="alert" className="text-xs text-destructive">
+                {addError}
+              </p>
+            )}
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+              <Button type="submit" disabled={addSubmitting}>
+                {addSubmitting && <Loader2 className="size-4 animate-spin" />}
+                Add Student
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -853,7 +896,13 @@ export default function StudentsPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleBulkUpload();
+            }}
+            className="space-y-4"
+          >
             <div className="space-y-1.5">
               <Label htmlFor="upload-target-section">Target Section</Label>
               <Select
@@ -954,18 +1003,17 @@ export default function StudentsPage() {
               </div>
             </div>
           )}
-          </div>
-
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-            <Button
-              onClick={handleBulkUpload}
-              disabled={uploadSubmitting || csvData.length === 0}
-            >
-              {uploadSubmitting && <Loader2 className="size-4 animate-spin" />}
-              Upload {csvData.length} Students
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+              <Button
+                type="submit"
+                disabled={uploadSubmitting || csvData.length === 0}
+              >
+                {uploadSubmitting && <Loader2 className="size-4 animate-spin" />}
+                Upload {csvData.length} Students
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -974,7 +1022,10 @@ export default function StudentsPage() {
         open={editOpen}
         onOpenChange={(open) => {
           setEditOpen(open);
-          if (!open) setEditStudent(null);
+          if (!open) {
+            setEditStudent(null);
+            setEditError(null);
+          }
         }}
       >
         <DialogContent className="sm:max-w-sm">
@@ -984,13 +1035,25 @@ export default function StudentsPage() {
               Update student details.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleEditStudent();
+            }}
+            className="space-y-3"
+            noValidate
+          >
             <div className="space-y-1.5">
               <Label htmlFor="edit-roll">Roll Number</Label>
               <Input
                 id="edit-roll"
                 value={editRoll}
-                onChange={(e) => setEditRoll(e.target.value)}
+                onChange={(e) => {
+                  setEditRoll(e.target.value);
+                  if (editError) setEditError(null);
+                }}
+                aria-invalid={!!editError}
+                aria-describedby={editError ? 'edit-student-error' : undefined}
               />
             </div>
             <div className="space-y-1.5">
@@ -998,17 +1061,27 @@ export default function StudentsPage() {
               <Input
                 id="edit-name"
                 value={editName}
-                onChange={(e) => setEditName(e.target.value)}
+                onChange={(e) => {
+                  setEditName(e.target.value);
+                  if (editError) setEditError(null);
+                }}
+                aria-invalid={!!editError}
+                aria-describedby={editError ? 'edit-student-error' : undefined}
               />
             </div>
-          </div>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-            <Button onClick={handleEditStudent} disabled={editSubmitting}>
-              {editSubmitting && <Loader2 className="size-4 animate-spin" />}
-              Save Changes
-            </Button>
-          </DialogFooter>
+            {editError && (
+              <p id="edit-student-error" role="alert" className="text-xs text-destructive">
+                {editError}
+              </p>
+            )}
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+              <Button type="submit" disabled={editSubmitting}>
+                {editSubmitting && <Loader2 className="size-4 animate-spin" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -1064,41 +1137,49 @@ export default function StudentsPage() {
               to a different section.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1.5">
-            <Label htmlFor="reassign-target-section">Target Section</Label>
-            <Select
-              value={reassignSectionId}
-              onValueChange={(value) => { if (value !== null) setReassignSectionId(value); }}
-            >
-              <SelectTrigger id="reassign-target-section" className="w-full">
-                <SelectValue placeholder="Select a section" />
-              </SelectTrigger>
-              <SelectContent>
-                {sections
-                  .filter(
-                    (s) =>
-                      s.isActive &&
-                      !s.isArchived &&
-                      s.id !== reassignStudent?.sectionId
-                  )
-                  .map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-            <Button
-              onClick={handleReassign}
-              disabled={reassignSubmitting || !reassignSectionId}
-            >
-              {reassignSubmitting && <Loader2 className="size-4 animate-spin" />}
-              Reassign
-            </Button>
-          </DialogFooter>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleReassign();
+            }}
+            className="space-y-1.5"
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor="reassign-target-section">Target Section</Label>
+              <Select
+                value={reassignSectionId}
+                onValueChange={(value) => { if (value !== null) setReassignSectionId(value); }}
+              >
+                <SelectTrigger id="reassign-target-section" className="w-full">
+                  <SelectValue placeholder="Select a section" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sections
+                    .filter(
+                      (s) =>
+                        s.isActive &&
+                        !s.isArchived &&
+                        s.id !== reassignStudent?.sectionId
+                    )
+                    .map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter className="pt-3">
+              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+              <Button
+                type="submit"
+                disabled={reassignSubmitting || !reassignSectionId}
+              >
+                {reassignSubmitting && <Loader2 className="size-4 animate-spin" />}
+                Reassign
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

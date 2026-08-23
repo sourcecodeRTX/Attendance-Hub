@@ -19,7 +19,11 @@ import { getAttendanceSessions } from '@/lib/db/attendance';
 import { getUserSections, getUserSubjects, getPrimarySectionId } from '@/lib/db/user-sections';
 import { getActivityLogs } from '@/lib/db/activity';
 import { useLocalDateString } from '@/hooks/use-local-date';
+import { computeCRSectionStats } from '@/lib/utils/cr-metrics';
 import { db } from '@/lib/db';
+import {
+  Alert, AlertDescription, AlertTitle,
+} from '@/components/ui/alert';
 import type { AttendanceSession, ActivityLog } from '@/lib/types';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -55,6 +59,19 @@ function StatCard({ icon, title, value }: { icon: React.ReactNode; title: string
         <p className="text-2xl font-bold">{value}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function LoadErrorNotice() {
+  return (
+    <Alert variant="destructive" role="alert">
+      <AlertTriangle className="size-4" />
+      <AlertTitle>Couldn&apos;t load dashboard data</AlertTitle>
+      <AlertDescription>
+        A data load failed, so the statistics below may be incomplete or stale.
+        They do NOT mean your institution has no data. Try refreshing the page.
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -102,12 +119,14 @@ function SuperAdminDashboard() {
   const [overallAttendance, setOverallAttendance] = useState(0);
   const [deptSummary, setDeptSummary] = useState<{ name: string; code: string; sections: number; students: number; attendance: number; admins: string }[]>([]);
   const [recentActivity, setRecentActivity] = useState<ActivityLog[]>([]);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     if (!user || !university) return;
     const uid = university.id;
 
     (async () => {
+      try {
       const [departments, allUsers, allStudents, sections, logs] = await Promise.all([
         getDepartments(uid),
         db.users.where('universityId').equals(uid).toArray(),
@@ -159,6 +178,10 @@ function SuperAdminDashboard() {
           };
         }),
       );
+      } catch (err) {
+        console.error('SuperAdminDashboard: Error loading data:', err);
+        setLoadFailed(true);
+      }
     })();
   }, [user, university]);
 
@@ -166,6 +189,7 @@ function SuperAdminDashboard() {
 
   return (
     <>
+      {loadFailed && <LoadErrorNotice />}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={<BookOpen className="h-4 w-4" />} title="Total Departments" value={departmentCount} />
         <StatCard icon={<Users className="h-4 w-4" />} title="Total Users" value={userCount} />
@@ -228,6 +252,7 @@ function AdminDashboard() {
   const [sectionSummary, setSectionSummary] = useState<{ name: string; students: number; attendance: number }[]>([]);
   const [teacherList, setTeacherList] = useState<Array<{ name: string; role: string; staffId: string }>>([]);
   const [recentActivity, setRecentActivity] = useState<ActivityLog[]>([]);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     if (!user || !university || !user.departmentId) return;
@@ -235,6 +260,7 @@ function AdminDashboard() {
     const deptId = user.departmentId;
 
     (async () => {
+      try {
       const [sections, deptStudents, deptUsers, logs] = await Promise.all([
         getSections(uid, deptId),
         db.students.where('departmentId').equals(deptId).toArray(),
@@ -268,6 +294,10 @@ function AdminDashboard() {
 
       setDeptAttendance(calcAttendancePercent(allSessions));
       setSectionSummary(list);
+      } catch (err) {
+        console.error('AdminDashboard: Error loading data:', err);
+        setLoadFailed(true);
+      }
     })();
   }, [user, university]);
 
@@ -275,6 +305,7 @@ function AdminDashboard() {
 
   return (
     <>
+      {loadFailed && <LoadErrorNotice />}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={<GraduationCap className="h-4 w-4" />} title="Total Students" value={studentCount} />
         <StatCard icon={<Users className="h-4 w-4" />} title="Teachers" value={teacherCount} />
@@ -363,6 +394,7 @@ function TeacherDashboard() {
   const [subjectSummary, setSubjectSummary] = useState<{ name: string; code: string; sessions: number; attendance: number; type: 'primary' | 'regular'; sectionName: string }[]>([]);
   const [crSessions, setCrSessions] = useState<AttendanceSession[]>([]);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     if (!user || !university) return;
@@ -480,6 +512,7 @@ function TeacherDashboard() {
         setDataLoaded(true);
       } catch (err) {
         console.error('TeacherDashboard: Error loading data:', err);
+        setLoadFailed(true);
         setDataLoaded(true);
       }
     })();
@@ -489,6 +522,7 @@ function TeacherDashboard() {
 
   return (
     <>
+      {loadFailed && <LoadErrorNotice />}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={<GraduationCap className="h-4 w-4" />} title="Total Students" value={studentCount} />
         <StatCard icon={<Clock className="h-4 w-4" />} title="Today&apos;s Sessions" value={todaySessions} />
@@ -545,7 +579,7 @@ function TeacherDashboard() {
         </Card>
       )}
 
-      {dataLoaded && subjectSummary.length === 0 && (
+      {dataLoaded && !loadFailed && subjectSummary.length === 0 && (
         <Card>
           <CardContent className="py-8">
             <p className="text-center text-muted-foreground">
@@ -594,12 +628,14 @@ function CRDashboard() {
   const [activeStudentCount, setActiveStudentCount] = useState(0);
   const [subjectSummary, setSubjectSummary] = useState<{ name: string; code: string; attendance: number }[]>([]);
   const [belowThreshold, setBelowThreshold] = useState<{ rollNumber: string; fullName: string; percentage: number }[]>([]);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     if (!user || !university) return;
     const threshold = university.attendanceThreshold ?? 75;
 
     (async () => {
+      try {
       const sectionId = await getPrimarySectionId(user.id);
       if (!sectionId) return;
 
@@ -630,18 +666,16 @@ function CRDashboard() {
         }),
       );
 
-      // Below-threshold students
+      // Below-threshold students (shared pure helper — students with zero
+      // recorded sessions count as 0%, never as a fabricated 100%)
       const active = students.filter((s) => s.isActive);
-      const stats = active.map((stu) => {
-        let total = 0, present = 0;
-        for (const sess of sessions) {
-          const rec = sess.records.find((r) => r.studentId === stu.id);
-          if (rec) { total++; if (rec.isPresent || rec.isDutyLeave) present++; }
-        }
-        return { rollNumber: stu.rollNumber, fullName: stu.fullName, percentage: total === 0 ? 100 : Math.round((present / total) * 100) };
-      });
-      setActiveStudentCount(active.length);
-      setBelowThreshold(stats.filter((s) => s.percentage < threshold).sort((a, b) => a.percentage - b.percentage));
+      const stats = computeCRSectionStats(active, sessions, threshold);
+      setActiveStudentCount(stats.activeStudentCount);
+      setBelowThreshold(stats.belowThreshold);
+      } catch (err) {
+        console.error('CRDashboard: Error loading data:', err);
+        setLoadFailed(true);
+      }
     })();
   }, [user, university, today]);
 
@@ -649,8 +683,9 @@ function CRDashboard() {
 
   return (
     <>
+      {loadFailed && <LoadErrorNotice />}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={<Users className="h-4 w-4" />} title="Total Students" value={belowThreshold.length > 0 ? belowThreshold.length + (activeStudentCount || 0) : activeStudentCount || 0} />
+        <StatCard icon={<Users className="h-4 w-4" />} title="Total Students" value={activeStudentCount || 0} />
         <StatCard icon={<Clock className="h-4 w-4" />} title="Today's Sessions" value={todaySessions} />
         <StatCard icon={<BarChart3 className="h-4 w-4" />} title="Today's Attendance" value={todayTotal > 0 ? `${Math.round((todayPresent / todayTotal) * 100)}%` : '-'} />
         <StatCard icon={<AlertTriangle className="h-4 w-4" />} title="Below Threshold" value={belowThreshold.length} />

@@ -84,7 +84,9 @@ export function Header() {
         className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
       >
         <span className={cn('inline-block size-2 rounded-full', sync.color)} />
-        <span className="hidden sm:inline">{sync.label}</span>
+        <span role="status" className="sr-only sm:inline">
+          {sync.label}
+        </span>
       </Link>
 
       <DropdownMenu>

@@ -17,6 +17,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from '@/components/ui/dialog';
+import {
   Alert,
   AlertDescription,
   AlertTitle,
@@ -35,6 +44,7 @@ export default function BackupPage() {
   const [settingsFile, setSettingsFile] = useState<File | null>(null);
   const [dataFile, setDataFile] = useState<File | null>(null);
   const [restoredCredentials, setRestoredCredentials] = useState<Array<{ email: string; fullName: string; temporaryPassword: string }>>([]);
+  const [importConfirmOpen, setImportConfirmOpen] = useState(false);
 
   const isSuperAdmin = user?.role === 'super_admin';
   if (!isSuperAdmin) {
@@ -105,35 +115,52 @@ export default function BackupPage() {
     if (!university || !user) return;
 
     setIsWiping(true);
+    let remoteWipeSucceeded = false;
     try {
       // 1. Wipe remote data via server action
       const res = await wipeUniversityData(university.id);
       if (!res.success) {
         throw new Error(res.error || 'Failed to wipe remote data');
       }
+      remoteWipeSucceeded = true;
 
-      // 2. Wipe local Dexie data
-      await Promise.all([
-        db.users.where('id').notEqual(user.id).delete(),
-        db.departments.clear(),
-        db.branches.clear(),
-        db.specialisations.clear(),
-        db.subjects.clear(),
-        db.sections.clear(),
-        db.students.clear(),
-        db.subjectSections.clear(),
-        db.attendanceSessions.clear(),
-        db.userSections.clear(),
-        db.userSubjects.clear(),
-      ]);
-      await clearSyncQueue();
+      // 2. Wipe local Dexie data — failures here must NOT be reported as a
+      // total failure, because the cloud data is already gone.
+      try {
+        await Promise.all([
+          db.users.where('id').notEqual(user.id).delete(),
+          db.departments.clear(),
+          db.branches.clear(),
+          db.specialisations.clear(),
+          db.subjects.clear(),
+          db.sections.clear(),
+          db.students.clear(),
+          db.subjectSections.clear(),
+          db.attendanceSessions.clear(),
+          db.userSections.clear(),
+          db.userSubjects.clear(),
+        ]);
+        await clearSyncQueue();
+      } catch (localError) {
+        console.error('Local cleanup after remote wipe failed:', localError);
+        toast.error(
+          'Cloud data was deleted, but clearing the data saved on this device failed. Refresh the page and sign in again to finish the reset.'
+        );
+        setWipeConfirmText('');
+        setHasDownloadedBackup(false);
+        return;
+      }
 
       toast.success('All data has been wiped successfully. Starting fresh.');
       setWipeConfirmText('');
       setHasDownloadedBackup(false);
     } catch (error) {
       console.error('Wipe error:', error);
-      toast.error('Failed to wipe data.');
+      toast.error(
+        remoteWipeSucceeded
+          ? 'Cloud data was deleted, but an error occurred while finishing the wipe on this device.'
+          : 'Failed to wipe data. Nothing was deleted.'
+      );
     } finally {
       setIsWiping(false);
     }
@@ -204,9 +231,10 @@ export default function BackupPage() {
         }
       );
 
-      toast.success('Data imported successfully! It will now sync to the cloud in the background.');
+      toast.success('Data imported successfully. Local data now matches the restored backup.');
       setSettingsFile(null);
       setDataFile(null);
+      setImportConfirmOpen(false);
     } catch (error: any) {
       console.error('Import error:', error);
       toast.error(error.message || 'Failed to import backup.');
@@ -292,9 +320,9 @@ export default function BackupPage() {
             </div>
           </CardContent>
           <CardFooter>
-            <Button 
-              onClick={handleImport} 
-              disabled={isImporting || !settingsFile || !dataFile} 
+            <Button
+              onClick={() => setImportConfirmOpen(true)}
+              disabled={isImporting || !settingsFile || !dataFile}
               className="w-full"
             >
               {isImporting ? <Loader2 className="size-4 animate-spin mr-2" /> : <UploadCloud className="size-4 mr-2" />}
@@ -303,6 +331,33 @@ export default function BackupPage() {
           </CardFooter>
         </Card>
       </div>
+
+      {/* Import confirmation — a restore overwrites server data and discards
+          pending offline writes, so it must never run on a single click. */}
+      <Dialog open={importConfirmOpen} onOpenChange={setImportConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Overwrite current data?</DialogTitle>
+            <DialogDescription>
+              Importing this backup will permanently overwrite the current data
+              on the server for every user, department, section, subject,
+              student, and attendance record. Pending offline changes that have
+              not synced yet will be discarded. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+            <Button
+              variant="destructive"
+              onClick={handleImport}
+              disabled={isImporting}
+            >
+              {isImporting && <Loader2 className="size-4 animate-spin mr-2" />}
+              {isImporting ? 'Importing...' : 'Overwrite & import backup'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* One-time credentials for accounts freshly created by a restore */}
       {restoredCredentials.length > 0 && (
