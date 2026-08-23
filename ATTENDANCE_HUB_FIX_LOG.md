@@ -17,7 +17,7 @@ Source of truth for *how it's being fixed*: this file.
 | 7 | Data Integrity & Write Concurrency | Complete | 2026-08-23 | 2bc80a8 |
 | 8 | Import/Export Robustness | Complete | 2026-08-23 | 8287f95 |
 | 9 | Input Validation & Error Honesty | Complete | 2026-08-23 | 0bb778d |
-| 10 | README/Docs Claims vs Measured Behavior (High) | Complete | 2026-08-23 | (see commit) |
+| 10 | README/Docs Claims vs Measured Behavior (High) | Complete | 2026-08-23 | 1cc1352 |
 | 11 | Query Performance & Scalability | Not started | | |
 | 12 | Frontend Accessibility I | Not started | | |
 | 13 | Frontend Accessibility II + UX Honesty | Not started | | |
