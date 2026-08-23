@@ -93,7 +93,11 @@ Ensure you have the following installed:
    ```env
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   SUPABASE_SERVICE_ROLE_KEY=your_service_role_secret_key
+   NEXT_PUBLIC_APP_URL=https://your-deployed-app-url
    ```
+   - `SUPABASE_SERVICE_ROLE_KEY` (server-only, **never** prefixed with `NEXT_PUBLIC_`) is required for privileged server flows (registration, backup/restore, user management); the app fails fast with a clear error if it is missing.
+   - `NEXT_PUBLIC_APP_URL` should be the public origin where the app is served; if unset on a client page, the password-reset email link falls back to the current browser origin. The redirect URL must also be allowlisted in your Supabase Auth settings.
 
 4. **Start the development server:**
    ```bash

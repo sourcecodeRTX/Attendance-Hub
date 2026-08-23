@@ -31,11 +31,24 @@ export async function updatePassword(password: string) {
   return supabase.auth.updateUser({ password });
 }
 
+function getPasswordResetRedirectTo(): string | undefined {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/+$/, '');
+  if (configured) {
+    return `${configured}/change-password`;
+  }
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin.replace(/\/+$/, '')}/change-password`;
+  }
+  return undefined;
+}
+
 export async function resetPasswordForEmail(email: string) {
   const supabase = createClient();
-  return supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/change-password`,
-  });
+  const redirectTo = getPasswordResetRedirectTo();
+  if (!redirectTo) {
+    return supabase.auth.resetPasswordForEmail(email);
+  }
+  return supabase.auth.resetPasswordForEmail(email, { redirectTo });
 }
 
 export async function createManagedUser(email: string, password: string) {
