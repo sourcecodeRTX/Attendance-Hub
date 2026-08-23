@@ -49,6 +49,7 @@ import { toast } from 'sonner';
 import { ActivityLog, ActivityActionType, Department, LogSettings } from '@/lib/types';
 import { ScrollText, Filter, Loader2, FileSpreadsheet, FileJson, Trash2, Settings, AlertTriangle } from 'lucide-react';
 import Papa from 'papaparse';
+import { sanitizeCsvRows } from '@/lib/utils/csv-export';
 
 const PAGE_SIZE = 50;
 
@@ -309,7 +310,7 @@ export default function ActivityLogsPage() {
 
     setIsDownloading(true);
     try {
-      const csv = Papa.unparse(exportData);
+      const csv = Papa.unparse(sanitizeCsvRows(exportData));
       downloadFile(csv, getFileName('csv'), 'text/csv;charset=utf-8;');
       toast.success(`Downloaded ${filteredLogs.length} logs as CSV`);
     } catch (error) {

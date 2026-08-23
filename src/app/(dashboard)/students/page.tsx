@@ -60,7 +60,7 @@ import {
   ArrowRightLeft,
   MoreVertical,
 } from 'lucide-react';
-import Papa from 'papaparse';
+import { isAllowedCsvFile, parseStudentsCsv } from '@/lib/utils/csv-import';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
 export default function StudentsPage() {
@@ -320,35 +320,29 @@ export default function StudentsPage() {
   }
 
   function handleFileParse(file: File) {
+    const fileCheck = isAllowedCsvFile(file);
+    if (!fileCheck.ok) {
+      toast.error(fileCheck.error);
+      return;
+    }
     setCsvFileName(file.name);
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete(results) {
-        const rows = results.data as Record<string, string>[];
-        const parsed: { rollNumber: string; fullName: string }[] = [];
-        for (const row of rows) {
-          const rollNumber =
-            row['roll_number'] || row['Roll Number'] || row['rollNumber'] || '';
-          const fullName =
-            row['full_name'] || row['Full Name'] || row['fullName'] || row['name'] || row['Name'] || '';
-          if (rollNumber.trim() && fullName.trim()) {
-            parsed.push({
-              rollNumber: rollNumber.trim(),
-              fullName: fullName.trim(),
-            });
-          }
-        }
-        if (parsed.length === 0) {
-          toast.error('No valid rows found. Ensure columns "roll_number" and "full_name" exist.');
+    file
+      .text()
+      .then((text) => {
+        const result = parseStudentsCsv(text);
+        if (!result.ok) {
+          toast.error(result.error);
+          setCsvData([]);
           return;
         }
-        setCsvData(parsed);
-      },
-      error() {
-        toast.error('Failed to parse file');
-      },
-    });
+        if (result.skippedCount > 0) {
+          toast.message(`${result.skippedCount} row${result.skippedCount === 1 ? '' : 's'} skipped (missing roll number or name).`);
+        }
+        setCsvData(result.students);
+      })
+      .catch(() => {
+        toast.error('Failed to read file');
+      });
   }
 
   function handleDrop(e: React.DragEvent) {
