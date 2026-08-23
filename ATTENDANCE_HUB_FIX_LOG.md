@@ -19,7 +19,7 @@ Source of truth for *how it's being fixed*: this file.
 | 9 | Input Validation & Error Honesty | Complete | 2026-08-23 | 0bb778d |
 | 10 | README/Docs Claims vs Measured Behavior (High) | Complete | 2026-08-23 | 1cc1352 |
 | 11 | Query Performance & Scalability | Complete | 2026-08-23 | 5fa0510 |
-| 12 | Frontend Accessibility I | Complete | 2026-08-23 | (see below) |
+| 12 | Frontend Accessibility I | Complete | 2026-08-23 | f9c6d53 |
 | 13 | Frontend Accessibility II + UX Honesty | Not started | | |
 | 14 | State Management & Hooks Robustness | Not started | | |
 | 15 | Backup/Restore & Activity-Log Correctness | Not started | | |
@@ -588,4 +588,4 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Full verification result (Step 7)**: `pnpm run lint` EXIT=0 (**17 warnings = exact Phase 0 baseline** — one transient 18th warning from an unused import in a new test file was fixed before completion; 0 errors); `pnpm exec tsc --noEmit` EXIT=0 clean; `pnpm run test` EXIT=0 (26 files / 208 tests passed — was 22/198); `pnpm run build` EXIT=0 (route output unchanged, middleware 75.3 kB, shared First Load JS 87.7 kB).
 - **Interactions with prior fixes**: F-017's CSV pre-parse path untouched — the dropzone fix only adds keyboard activation of the same hidden input; F-024's honesty toasts untouched; F-019's debounced realtime handlers untouched (attendance page edits confined to MarkingArea/history markup); Base UI dialog primitives untouched (focus management remains library-owned). No behavioral logic changed anywhere — all edits are attributes, element tags, event handlers, and one import addition (Label in attendance page).
 - **Residual risk / follow-ups (new leads logged)**: see "New Leads Observed" — dialog footer buttons submit via onClick (no Enter-to-submit), toast-only forms lack inline errors, live-region announcements for sync chip/offline banner deferred to Phase 13, div-grid pseudo-tables lack header semantics (Phase 19 candidate), dialog-internal h4 headings left in place, native window.confirm still used for unsaved-changes guard.
-- **Commit**: (hash recorded by follow-up tracker commit)
+- **Commit**: f9c6d53 — fix(phase12): frontend accessibility I — keyboard-operable attendance rows & CSV dropzone, named icon controls, aria-current nav, th scope=col, label associations, and role=alert/aria-describedby validation wiring across 22 files
