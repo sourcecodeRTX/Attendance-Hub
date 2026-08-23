@@ -29,6 +29,12 @@ export interface AttendanceSession {
   createdBy: AttendanceMarker;
   lastModifiedBy: AttendanceMarker;
   createdAt: string;
+  /**
+   * Server-maintained monotonic counter (migration 022). Sync conflict
+   * resolution compares this instead of device clocks. Undefined on rows
+   * written locally but not yet pulled/pushed since the column existed.
+   */
+  revision?: number;
 }
 
 export interface SubjectAttendanceSummary {

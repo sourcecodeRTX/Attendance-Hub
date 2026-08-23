@@ -56,7 +56,13 @@ export async function getSectionAnalytics(
     }
   }
 
-  const subjects = await db.subjects.where('sectionId').equals(sectionId).toArray();
+  // Subjects link to sections through the subject_sections junction table
+  // (migration 013 dropped subjects.section_id).
+  const links = await db.subjectSections.where('sectionId').equals(sectionId).toArray();
+  const subjects =
+    links.length === 0
+      ? []
+      : await db.subjects.where('id').anyOf(links.map((l) => l.subjectId)).toArray();
   const sessions = await db.attendanceSessions
     .where('sectionId')
     .equals(sectionId)

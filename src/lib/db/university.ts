@@ -300,16 +300,38 @@ export async function createSection(section: Section, userId: string): Promise<v
 }
 
 export async function deleteSection(sectionId: string, universityId: string, userId: string): Promise<void> {
-  const subjects = await db.subjects.where({ universityId, sectionId }).toArray();
-  const subjectIds = subjects.map(s => s.id);
+  // Section↔subject links live in the subject_sections junction table since
+  // migration 013 dropped subjects.section_id — querying subjects by sectionId
+  // would always return an empty set.
+  const links = await db.subjectSections.where('sectionId').equals(sectionId).toArray();
+  const linkedSubjectIds = [...new Set(links.map((l) => l.subjectId))];
 
-  await db.transaction('rw', [db.sections, db.userSections, db.userSubjects, db.subjects, db.attendanceSessions, db.syncQueue], async () => {
+  await db.transaction('rw', [db.sections, db.userSections, db.userSubjects, db.subjects, db.subjectSections, db.attendanceSessions, db.syncQueue], async () => {
     await db.userSections.where('sectionId').equals(sectionId).delete();
     await db.userSubjects.where('sectionId').equals(sectionId).delete();
-    for (const sid of subjectIds) {
-      await db.attendanceSessions.where('subjectId').equals(sid).delete();
+    await db.attendanceSessions.where('sectionId').equals(sectionId).delete();
+    await db.subjectSections.where('sectionId').equals(sectionId).delete();
+
+    // Subjects left with no remaining section link are no longer taught
+    // anywhere — remove them locally and queue their remote deletion (the
+    // server's FK cascades clean up any leftover junction rows).
+    for (const sid of linkedSubjectIds) {
+      const remainingLinks = await db.subjectSections.where('subjectId').equals(sid).count();
+      if (remainingLinks === 0) {
+        await db.subjects.delete(sid);
+        await db.syncQueue.add({
+          universityId,
+          ownerId: userId,
+          type: 'delete',
+          collection: 'subjects',
+          docId: sid,
+          data: null,
+          createdAt: new Date().toISOString(),
+          retryCount: 0,
+        });
+      }
     }
-    await db.subjects.where('sectionId').equals(sectionId).delete();
+
     await db.sections.delete(sectionId);
 
     await db.syncQueue.add({

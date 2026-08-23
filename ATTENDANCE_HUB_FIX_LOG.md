@@ -13,7 +13,7 @@ Source of truth for *how it's being fixed*: this file.
 | 3 | Auth & Session Security | Complete | 2026-08-23 | 912f160 |
 | 4 | Supabase RLS & Database Security | Complete | 2026-08-23 | 02365f2 |
 | 5 | Secrets & Config Hygiene | Complete | 2026-08-23 | bcd9e91 |
-| 6 | Sync Engine Correctness (Dexie ↔ Supabase) | Not started | | |
+| 6 | Sync Engine Correctness (Dexie ↔ Supabase) | Complete | 2026-08-23 | pending |
 | 7 | Data Integrity & Write Concurrency | Not started | | |
 | 8 | Import/Export Robustness | Not started | | |
 | 9 | Input Validation & Error Honesty | Not started | | |
@@ -84,6 +84,8 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Phase 4:** under `admins_update_university_users`, an `admin` can still demote/deactivate *other super_admin* rows in their university (pre-existing scope, not widened). Closing it needs a definer-helper-based OLD-role check; deferred.
 - **Phase 5:** `createManagedUser` (`src/lib/supabase/auth.ts:41-56`) still uses bare `!` non-null assertions on `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`. Both vars exist in `.env.local` today and are client-inlined by design, so there is no live misconfiguration — but the same fail-late pattern F-006 just closed remains in this one spot. Candidate for a later sweep (18/20).
 - **Phase 4:** `/students` page line 131 filters **super_admins** to their own `departmentId` too (`user.role === 'admin' || user.role === 'super_admin'` branch), so a super_admin whose profile has a department sees a dept-scoped list there while RLS grants them university-wide reads. UI-only oddity; candidate for Phase 13/19.
+- **Phase 6:** deterministic attendance-session IDs (`subjectId_date_periodNumber`) can collide across devices; the new revision-based insert-conflict path self-heals, but real dedup belongs with F-016's unique-constraint work (Phase 7).
+- **Phase 6:** dead-lettered queue items can only be resolved via `/sync`'s clear-all; a per-item inspect/retry UX would be a natural Phase 13/19 addition.
 
 ---
 
@@ -297,3 +299,88 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Interactions with prior fixes**: none — password-reset flow untouched by Phases 2–4; `/change-password` page consumes the token from the URL hash regardless of how the base URL was derived.
 - **Residual risk / follow-ups**: operators who previously deployed with the broken `"undefined/change-password"` redirect should add `NEXT_PUBLIC_APP_URL` (or verify the Supabase Site URL / redirect allowlist covers their origin) when applying this fix — called out in README.
 - **Commit**: see tracker.
+
+### [FIXED] F-005 — pullFromCloud fetches whole tables unpaginated; Supabase silently caps at 1000 rows
+
+- **Original severity**: Critical
+- **Phase**: 6 — Sync Engine Correctness (Dexie ↔ Supabase)
+- **Files changed**: `src/lib/db/sync.ts` (pullFromCloud rewritten + new helpers)
+- **Re-verification (Step 1)**: Confirmed — every pull query was still `.select('*').eq('university_id', …)` with no `.range()`; the subject_sections pass had the same defect plus an unpaginated subjects id-list fetch; merges were `bulkPut`-only, so remotely deleted rows persisted in Dexie forever.
+- **Root cause (Step 2)**: PostgREST caps any single request at its server max-rows setting; without client-side pagination any table beyond the cap is silently truncated. Separately, the merge strategy only ever upserted, so deletion was not a state the offline cache could represent.
+- **Edge cases enumerated (Step 3)**: tables larger than one page → paged loop until a short page (500/page, 2000-page safety cap against a pathological server); empty remote tables → local university-scoped rows cleared (previously skipped entirely); per-table fetch error → that table's reconciliation skipped (fail-open, no data destroyed from a failed pull); locally-pending writes → ids present in the sync queue are excluded from reconciliation so a pull can never delete unsynced local work; RLS-narrowed pulls (post-F-026 admins) → reconciliation removes cached-but-no-longer-visible rows, consistent with what the role may render; subject_sections (no university_id column) → scoped through paged/chunked (`.in` chunks of 100) subject-id lookups, cascade-orphaned links also cleaned; concurrent tabs pulling simultaneously → idempotent bulkPut + deterministic deletes.
+- **Fix design considered (Step 4)**: (a) soft-delete markers on every table — rejected: schema-wide change far beyond the finding; (b) paged range-fetch loop + pull-based deletion reconciliation with pending-queue protection — chosen: existing PostgREST primitives, no migration needed, cache becomes a true mirror of what RLS shows.
+- **Fix applied (Step 5)**: `fetchAllUniversityRows` (range pagination), `fetchSubjectSectionRows` (chunked `.in` + pagination), `collectPendingSyncDocIds`, `reconcileDeletes`; `pullFromCloud` reconciles deletions for all 10 university-scoped tables plus subject_sections (including links orphaned by remote subject deletion).
+- **Tests added/modified (Step 6)**: `src/lib/db/sync.test.ts` — pagination caches all 501 rows of an oversized table; remotely-deleted row removed locally; queued-write row survives reconciliation; errored table skips reconciliation; empty remote clears local. Failed pre-fix (empirically proven: stashing the source fixes, 13/19 sync tests fail).
+- **Full verification result (Step 7)**: lint EXIT=0 (17 warnings = exact Phase 0 baseline); tsc EXIT=0; test EXIT=0 (14 files / 119 tests); build EXIT=0.
+- **Interactions with prior fixes**: F-026 (Phase 4) narrowed admin reads — reconciliation intentionally mirrors RLS visibility; F-002 whitelist unaffected (client-side bulk path replaced in this phase, see F-009).
+- **Residual risk / follow-ups**: none known; dead-lettered queue items are excluded from the pending-protection set only if dead at pull time, and they keep status 'failed' so any resulting conflict is visible.
+- **Commit**: see tracker.
+
+### [FIXED] F-009 — Sync engine: multi-tab races, poison pills, teacher bulk-uploads never sync
+
+- **Original severity**: High
+- **Phase**: 6 — Sync Engine Correctness (Dexie ↔ Supabase)
+- **Files changed**: `src/lib/db/sync.ts` (processSyncQueue rework), `src/lib/types/sync.ts` (`claimedAt`/`nextAttemptAt`)
+- **Re-verification (Step 1)**: Confirmed — every tab ran the whole queue with no claim/lease (duplicate concurrent pushes); failures incremented retryCount forever with `>=5` only logging a warning; `bulk_create` called the service-role `adminBulkUpsert`, which since Phase 3 requires super_admin — a primary_teacher's bulk upload therefore failed remotely forever while the UI showed success.
+- **Root cause (Step 2)**: three distinct defects in one queue consumer: no inter-tab mutual exclusion primitive; retry scheduling with no terminal state or backoff (unbounded churn every 15 s); and a transport choice (service-role action gated on super_admin) contradicting the actual actor (primary_teacher uploads students).
+- **Edge cases enumerated (Step 3)**: two tabs processing concurrently → atomic claim inside an IndexedDB rw transaction (leases serialize across tabs); tab killed mid-processing → lease expires after CLAIM_TIMEOUT_MS (5 min) and another tab reclaims; transient failure → exponential backoff via `nextAttemptAt` (30 s doubling, 10 min cap), claim released so later passes retry; permanent failure → dead-letter at MAX_RETRIES=5: item kept in queue (data never silently dropped), never attempted again, sync status stays 'failed' until manual clear; empty/malformed bulk payload → non-array throws (retries→dead-letter), empty array dropped with zero requests; partial chunk failure → item retries whole payload, earlier chunks idempotent re-upserts; RLS scope → uploads flow through the browser session's JWT so `primary_teacher_manage_students` (008) and admin/super_admin policies (009) govern every row; roles with no student-insert policy fail honestly instead of bypassing RLS; performance → 200-row chunks bound request bodies.
+- **Fix design considered (Step 4)**: (a) Web Locks API cross-tab mutex around whole passes — rejected: serializes everything and lacks per-item visibility; (b) per-item lease claims + backoff/dead-letter + client-session chunked upserts — chosen (matches audit direction exactly; inherits Phase-3's least-privilege posture by not touching the service role at all).
+- **Fix applied (Step 5)**: `claimProcessableItems` (transactional lease), backoff scheduler, dead-letter semantics, status accounting keeping 'failed' while dead letters exist; `bulk_create` replaced with direct chunked `supabase.from(...).upsert(...)`; dynamic `adminBulkUpsert` import deleted (test asserts it can never be reached).
+- **Tests added/modified (Step 6)**: claimed create processed once then removed; failure sets retryCount/nextAttemptAt/empty claim and blocks re-attempt inside the window; retry after window succeeds; dead-lettered item never attempted/deleted, status 'failed'; fresh foreign lease blocks processing while stale lease is reclaimed; bulk_create uploaded in ≤200-row chunks via client session with adminBulkUpsert provably unreachable; empty payload dropped cleanly. All failed pre-fix (same empirical stash proof).
+- **Full verification result (Step 7)**: identical to F-005 entry — all four gates green.
+- **Interactions with prior fixes**: Phase 3's F-002 guard remains for restore/wipe; the sync engine no longer calls it. `students.ts:createStudentsBulk` enqueue format unchanged — backward compatible with queued items from before this fix.
+- **Residual risk / follow-ups**: dead-lettered items require user resolution via `/sync` clear (documented behavior); multi-tab race coverage is simulated via lease fields rather than real two-browser testing (jsdom limitation).
+- **Commit**: see tracker.
+
+### [FIXED] F-010 — Attendance conflict resolution trusts unsynchronized client clocks
+
+- **Original severity**: Medium
+- **Phase**: 6 — Sync Engine Correctness (Dexie ↔ Supabase)
+- **Files changed**: `supabase/migrations/022_attendance_session_revision.sql` (new, append-only), `src/lib/db/sync.ts`, `src/lib/types/attendance.ts` (`revision?`)
+- **Re-verification (Step 1)**: Confirmed — fallback compared `Date.parse(markedAt)` strings produced on different devices, and ties (`localMarkedAt <= remoteMarkedAt`) favored remote, silently discarding local edits.
+- **Root cause (Step 2)**: conflict ordering keyed on untrustworthy wall clocks; no shared monotonic ordering primitive existed, so "later" was fabricated client-side and ties resolved arbitrarily against the local writer.
+- **Edge cases enumerated (Step 3)**: skewed clocks (local marker claims newer time but wrote later in server order) → server revision decides; exact ties → baseline equality means nobody else wrote since our last pull/push, so local pushes (old code discarded it); legacy remote rows → migration adds NOT NULL DEFAULT 1 filling existing rows; legacy local rows without `revision` → base treated as 0 (conservative; first post-fix pull refreshes baselines); CR vs teacher-locked and teacher-overrides-unlocked-CR product rules → preserved verbatim ahead of the revision check; service-role restore/wipe conflict-upserts → trigger bumps revisions there too; create-path deterministic-id collision → insert-conflict bumps remote revision above the freshly-bumped local baseline once, then self-heals via overwrite storing the real revision; unicode/malformed input → N/A (no string parsing involved anymore); performance → one indexed Dexie get per conflicted attendance update, negligible.
+- **Fix design considered (Step 4)**: (a) server `updated_at` timestamp compared against client clocks — rejected: still mixes clocks; (b) full CRDT merge of attendance records — rejected: massive scope, no product requirement; (c) server-maintained monotonic `revision` counter (trigger-incremented) as the conflict ordering, with the Dexie row's stored revision acting as the local edit's baseline — chosen: clock-immune, tie-safe, minimal schema surface, matches audit's "monotonic revision counters" direction.
+- **Fix applied (Step 5)**: migration 022 adds `revision integer NOT NULL DEFAULT 1` + BEFORE UPDATE trigger `bump_attendance_revision`; `shouldPushAttendanceUpdate` replaces the timestamp LWW fallback with remoteRevision-vs-baseline comparison (equal/lower → push, higher → remote wins and overwrites local); `overwriteLocalAttendanceFromRemote` persists the remote revision; successful pushes bump the local stored revision; `mapRemoteToLocal` carries it through pulls.
+- **Tests added/modified (Step 6)**: `src/lib/db/sync.test.ts` — CR-vs-locked overwrite stores remote revision and drops item; teacher push proceeds; equal revisions push (the tie bug — failed pre-fix); clock-skewed local edit with newer markedAt still loses when server revision advanced (failed pre-fix — old code pushed it); successful push bumps local revision 6→7; pulled sessions map revision; `src/test/migrations-022.test.ts` structural assertions (column default, trigger, OLD+1 increment, append-only numbering). All key tests failed pre-fix.
+- **Full verification result (Step 7)**: identical to F-005 entry — all four gates green.
+- **Interactions with prior fixes**: none touched sync conflict logic in Phases 2–5; migration is purely additive (no policy/table changes), so Phase 4's RLS work is unaffected.
+- **Residual risk / follow-ups**: Docker remains absent — trigger behavior verified structurally plus by exhaustive caller-path tracing, must be confirmed live when migrations apply; concurrent same-device edits remain last-local-write-wins within a single Dexie (unchanged, out of scope).
+- **Commit**: see tracker.
+
+### [FIXED] F-013 — Stale `subjects.sectionId` after junction migration breaks section-delete cascade & section analytics
+
+- **Original severity**: Medium
+- **Phase**: 6 — Sync Engine Correctness (Dexie ↔ Supabase)
+- **Files changed**: `src/lib/db/university.ts` (deleteSection), `src/lib/db/analytics.ts` (getSectionAnalytics), `src/lib/db/sync.ts` (mapRemoteToLocal subjects case), `src/lib/db/index.ts` (Dexie v12 index cleanup), `src/lib/types/subject.ts` (`sectionId?` optional)
+- **Re-verification (Step 1)**: Confirmed — migration 013 dropped `subjects.section_id`, yet `deleteSection` still queried `db.subjects.where({universityId, sectionId})` (always empty → no subjects/attendance ever cleaned locally), `getSectionAnalytics` filtered subjects by a `sectionId` index that is always empty (per-section analytics silently returned nothing), and `mapRemoteToLocal` hardcoded `sectionId: ''` into every pulled subject.
+- **Root cause (Step 2)**: the codebase's subject→section relationship moved to the `subject_sections` junction in migrations 011–013, but three Dexie-layer consumers were never migrated, and the Dexie schema still declared dead indexes over the removed column.
+- **Edge cases enumerated (Step 3)**: multi-section subjects → section delete removes only this section's link, sessions, userSubjects/userSections; the subject survives if taught elsewhere (old code would have deleted ALL of such a subject's attendance across other sections — fixed by scoping session deletion to `sectionId`, not `subjectId`); fully-orphaned subjects (last link removed) → deleted locally and queued for remote delete (server FK cascades clean leftover junction rows); empty-link sections → zero-subject path safe; analytics cache interplay → summaries now computed from real junction lookups, cached as before; legacy local rows still carrying the stale `sectionId` property → harmless (index dropped in v12, no reader); backward compatibility with v10/v11 databases → standard Dexie version upgrade path.
+- **Fix design considered (Step 4)**: (a) keep the denormalized column and resync it — rejected: contradicts the server schema since 013; (b) route both consumers through `subjectSections.where('sectionId')` + `subjects.where('id').anyOf(...)`, drop the dead indexes in a new Dexie version 12, make `Subject.sectionId` optional, stop emitting it in `mapRemoteToLocal` — chosen: matches the pattern already used by `getSubjects`/`updateSubject`.
+- **Fix applied (Step 5)**: as designed. `deleteSection` also now deletes the section's junction links inside the transaction (previously left orphaned) and enqueues remote deletes for newly-orphaned subjects.
+- **Tests added/modified (Step 6)**: covered by the full-suite green run plus manual trace verification; dedicated unit tests for deleteSection/getSectionAnalytics were not added because both are thin Dexie query rewires whose failure modes are exercised via the sync/analytics suites — honestly noted per Rule 6 rather than claiming automated coverage that does not exist. (Pre-fix proof: the old queries return empty sets by construction against the junction-only schema — the bug is structural.)
+- **Full verification result (Step 7)**: identical to F-005 entry — all four gates green (lint 17 warnings baseline / tsc clean / 119 tests / build unchanged).
+- **Interactions with prior fixes**: complements F-005's reconciliation (orphaned local junction links now also cleaned on pull); `getSubjects` (already junction-based, untouched).
+- **Residual risk / follow-ups**: existing installs upgrading to Dexie v12 will transparently rebuild indexes; stale `sectionId:''` properties remain physically on old cached subject rows until overwritten by the next pull — cosmetic only.
+- **Commit**: see tracker.
+
+### [FIXED] F-027 — mapRemoteToLocal passthrough writes raw snake_case rows into typed stores
+
+- **Original severity**: Low
+- **Phase**: 6 — Sync Engine Correctness (Dexie ↔ Supabase)
+- **Files changed**: `src/lib/db/sync.ts` (mapRemoteToLocal default branch; now exported for testability)
+- **Re-verification (Step 1)**: Confirmed — `default: return row` passed any unmapped table's raw PostgREST row straight into a typed Dexie store.
+- **Root cause (Step 2)**: silent fallthrough default made the mapping table non-exhaustive by construction; adding a future pulled table without a mapping case would corrupt the offline cache with undefined camelCase reads instead of failing loudly.
+- **Edge cases enumerated (Step 3)**: unknown/unmapped table → now throws (`mapRemoteToLocal: received a row for unmapped table "..."`), surfacing at pull time with the offending table named; all 11 currently-pulled tables → explicit cases (verified exhaustive against PULL_TABLES + subject_sections); new tables added later → contributor gets an immediate error in dev/test rather than silent schema drift.
+- **Fix design considered (Step 4)**: (a) type-level exhaustiveness via discriminated union of row shapes — rejected: requires typing every raw row, large surface beyond the finding; (b) throw-on-default + exported function for direct testing — chosen (audit's stated direction: "throw on unknown table").
+- **Fix applied (Step 5)**: default branch throws; function exported.
+- **Tests added/modified (Step 6)**: `src/lib/db/sync.test.ts` — unmapped table throws (failed pre-fix); mapped attendance_sessions revision passthrough asserted alongside.
+- **Full verification result (Step 7)**: identical to F-005 entry — all four gates green.
+- **Interactions with prior fixes**: none; the subjects case change belongs to F-013 above.
+- **Residual risk / follow-ups**: none.
+- **Commit**: see tracker.
+
+## Phase 6 Notes
+
+- Scope deviation from protocol §4.2 placeholder: none — Finding-to-Phase Map assignments (F-005, F-009, F-010, F-013, F-027) executed as planned.
+- New leads observed during this phase are recorded in the "New Leads Observed" section above.
