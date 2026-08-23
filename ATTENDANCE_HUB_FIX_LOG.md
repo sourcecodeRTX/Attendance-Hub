@@ -18,7 +18,7 @@ Source of truth for *how it's being fixed*: this file.
 | 8 | Import/Export Robustness | Complete | 2026-08-23 | 8287f95 |
 | 9 | Input Validation & Error Honesty | Complete | 2026-08-23 | 0bb778d |
 | 10 | README/Docs Claims vs Measured Behavior (High) | Complete | 2026-08-23 | 1cc1352 |
-| 11 | Query Performance & Scalability | Complete | 2026-08-23 | (pending) |
+| 11 | Query Performance & Scalability | Complete | 2026-08-23 | 5fa0510 |
 | 12 | Frontend Accessibility I | Not started | | |
 | 13 | Frontend Accessibility II + UX Honesty | Not started | | |
 | 14 | State Management & Hooks Robustness | Not started | | |
