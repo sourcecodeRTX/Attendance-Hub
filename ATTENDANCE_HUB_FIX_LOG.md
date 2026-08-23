@@ -20,7 +20,7 @@ Source of truth for *how it's being fixed*: this file.
 | 10 | README/Docs Claims vs Measured Behavior (High) | Complete | 2026-08-23 | 1cc1352 |
 | 11 | Query Performance & Scalability | Complete | 2026-08-23 | 5fa0510 |
 | 12 | Frontend Accessibility I | Complete | 2026-08-23 | f9c6d53 |
-| 13 | Frontend Accessibility II + UX Honesty | Complete | 2026-08-23 | |
+| 13 | Frontend Accessibility II + UX Honesty | Complete | 2026-08-23 | bbab2c6 |
 | 14 | State Management & Hooks Robustness | Not started | | |
 | 15 | Backup/Restore & Activity-Log Correctness | Not started | | |
 | 16 | Test-Quality Fixes | Not started | | |
