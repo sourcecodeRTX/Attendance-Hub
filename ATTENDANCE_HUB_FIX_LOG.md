@@ -14,7 +14,7 @@ Source of truth for *how it's being fixed*: this file.
 | 4 | Supabase RLS & Database Security | Complete | 2026-08-23 | 02365f2 |
 | 5 | Secrets & Config Hygiene | Complete | 2026-08-23 | bcd9e91 |
 | 6 | Sync Engine Correctness (Dexie ↔ Supabase) | Complete | 2026-08-23 | dc16e4a |
-| 7 | Data Integrity & Write Concurrency | Complete | 2026-08-23 | |
+| 7 | Data Integrity & Write Concurrency | Complete | 2026-08-23 | 2bc80a8 |
 | 8 | Import/Export Robustness | Not started | | |
 | 9 | Input Validation & Error Honesty | Not started | | |
 | 10 | README/Docs Claims vs Measured Behavior (High) | Not started | | |
