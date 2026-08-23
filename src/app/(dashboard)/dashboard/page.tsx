@@ -18,6 +18,7 @@ import { getSubjects } from '@/lib/db/subjects';
 import { getAttendanceSessions } from '@/lib/db/attendance';
 import { getUserSections, getUserSubjects, getPrimarySectionId } from '@/lib/db/user-sections';
 import { getActivityLogs } from '@/lib/db/activity';
+import { useLocalDateString } from '@/hooks/use-local-date';
 import { db } from '@/lib/db';
 import type { AttendanceSession, ActivityLog } from '@/lib/types';
 
@@ -28,8 +29,6 @@ const ROLE_LABELS: Record<string, string> = {
   regular_teacher: 'Regular Teacher',
   cr: 'Class Representative',
 };
-
-const TODAY = new Date().toISOString().split('T')[0];
 
 function calcAttendancePercent(sessions: AttendanceSession[]): number {
   let total = 0;
@@ -356,6 +355,7 @@ function AdminDashboard() {
 
 function TeacherDashboard() {
   const { user, university } = useAuthStore();
+  const today = useLocalDateString();
   const [studentCount, setStudentCount] = useState(0);
   const [todaySessions, setTodaySessions] = useState(0);
   const [overallAttendance, setOverallAttendance] = useState(0);
@@ -403,7 +403,7 @@ function TeacherDashboard() {
 
         const combinedSummary: typeof subjectSummary = [];
         const allSessions: AttendanceSession[] = [...primarySessions];
-        let todayCount = primarySessions.filter(s => s.date === TODAY).length;
+        let todayCount = primarySessions.filter(s => s.date === today).length;
         const processedSubjectSections = new Set<string>();
 
         if (primarySectionId) {
@@ -437,7 +437,7 @@ function TeacherDashboard() {
             
             if (us.sectionId !== primarySectionId) {
               allSessions.push(...subSess);
-              todayCount += subSess.filter(s => s.date === TODAY).length;
+              todayCount += subSess.filter(s => s.date === today).length;
             }
 
             const section = await db.sections.get(us.sectionId);
@@ -483,7 +483,7 @@ function TeacherDashboard() {
         setDataLoaded(true);
       }
     })();
-  }, [user, university]);
+  }, [user, university, today]);
 
   const threshold = university?.attendanceThreshold ?? 75;
 
@@ -587,6 +587,7 @@ function TeacherDashboard() {
 
 function CRDashboard() {
   const { user, university } = useAuthStore();
+  const today = useLocalDateString();
   const [todayPresent, setTodayPresent] = useState(0);
   const [todayTotal, setTodayTotal] = useState(0);
   const [todaySessions, setTodaySessions] = useState(0);
@@ -609,7 +610,7 @@ function CRDashboard() {
       ]);
 
       // Today's totals
-      const todaySess = sessions.filter((s) => s.date === TODAY);
+      const todaySess = sessions.filter((s) => s.date === today);
       let tp = 0, tt = 0;
       for (const s of todaySess) {
         for (const r of s.records) {
@@ -642,7 +643,7 @@ function CRDashboard() {
       setActiveStudentCount(active.length);
       setBelowThreshold(stats.filter((s) => s.percentage < threshold).sort((a, b) => a.percentage - b.percentage));
     })();
-  }, [user, university]);
+  }, [user, university, today]);
 
   const threshold = university?.attendanceThreshold ?? 75;
 

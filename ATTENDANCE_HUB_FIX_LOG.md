@@ -14,7 +14,7 @@ Source of truth for *how it's being fixed*: this file.
 | 4 | Supabase RLS & Database Security | Complete | 2026-08-23 | 02365f2 |
 | 5 | Secrets & Config Hygiene | Complete | 2026-08-23 | bcd9e91 |
 | 6 | Sync Engine Correctness (Dexie ↔ Supabase) | Complete | 2026-08-23 | dc16e4a |
-| 7 | Data Integrity & Write Concurrency | Not started | | |
+| 7 | Data Integrity & Write Concurrency | Complete | 2026-08-23 | |
 | 8 | Import/Export Robustness | Not started | | |
 | 9 | Input Validation & Error Honesty | Not started | | |
 | 10 | README/Docs Claims vs Measured Behavior (High) | Not started | | |
@@ -384,3 +384,51 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 
 - Scope deviation from protocol §4.2 placeholder: none — Finding-to-Phase Map assignments (F-005, F-009, F-010, F-013, F-027) executed as planned.
 - New leads observed during this phase are recorded in the "New Leads Observed" section above.
+
+### [FIXED] F-011 — "Today" is UTC everywhere; dashboard date frozen at module load
+
+- **Original severity**: High
+- **Phase**: 7 — Data Integrity & Write Concurrency
+- **Files changed**: `src/lib/utils/date.ts` (new), `src/hooks/use-local-date.ts` (new), `src/app/(dashboard)/attendance/page.tsx`, `src/app/(dashboard)/dashboard/page.tsx`
+- **Re-verification (Step 1)**: Confirmed — attendance still derived the marking date from `new Date().toISOString().split('T')[0]` (UTC calendar date) and dashboard still computed `TODAY` once at module scope, so a tab opened yesterday kept filtering "today" against yesterday's date forever.
+- **Root cause (Step 2)**: calendar-date derivation routed through `Date.prototype.toISOString()`, which is by definition UTC; for any UTC+n institution every session between local midnight and the offset lands on the wrong `date` key. The module-scope constant additionally froze that wrong value for the process lifetime.
+- **Edge cases enumerated (Step 3)**: UTC+n / UTC−n institutions → helper uses local `getFullYear/getMonth/getDate` components, never UTC; single-digit months/days → zero-padded (`2026-01-05`); long-lived tabs across midnight → 30 s interval in `useLocalDateString` flips the value and both pages re-run their data loads via effect dependencies; attendance page already recomputed per render → now also rolls over; timezone-agnostic tests → fixtures built from local Date components; DST boundaries → component extraction is DST-safe (no arithmetic across offsets); historical sessions keyed with old UTC dates → read paths compare like-for-like strings going forward; sessions created near midnight before vs after fix may differ by one day — accepted (that is the correction); SSR/hydration → both consumers are `'use client'` components computing after mount; perf → one string build per render + one timer per page.
+- **Fix design considered (Step 4)**: (a) inline `toLocaleDateString('en-CA')` at call sites — rejected: locale-dependent behavior is implicit and fragile across environments; (b) shared explicit-component helper + a small rollover hook consumed by both pages — chosen: deterministic, testable, matches the codebase's hooks/lib idiom split.
+- **Fix applied (Step 5)**: `getLocalDateString()` builds the ISO-shaped local date from local components; `useLocalDateString()` returns it reactively with a 30 s day-rollover check; attendance page's `getTodayUTC()` deleted in favor of the hook; dashboard's module-scope `TODAY` deleted, both `TeacherDashboard` and `CRDashboard` consume the hook and include it in their load-effect dependency arrays so stats refresh at rollover.
+- **Tests added/modified (Step 6)**: `src/lib/utils/date.test.ts` — zero-padding, year-end/double-digit cases, and device-local-vs-UTC agreement. All failed pre-fix (the helper did not exist). Rollover-hook timing not unit-tested (jsdom fake-timer churn for a 30 s interval adds no real signal); honestly noted per Rule 6.
+- **Full verification result (Step 7)**: lint EXIT=0 (17 warnings = exact Phase 0 baseline, 0 errors); tsc EXIT=0; test EXIT=0 (17 files / 133 tests); build EXIT=0 (route output unchanged).
+- **Interactions with prior fixes**: F-016's UUID session ids no longer embed the date string, so this change cannot collide with id construction; activity-log date filtering (activity-logs/page.tsx) still uses UTC dates but was NOT part of this finding's location list — left untouched per Rule 1.
+- **Residual risk / follow-ups**: other cosmetic UTC-date usages (backup filename, activity-log day grouping) remain — candidates for Phase 18/19 sweeps if product cares.
+- **Commit**: see tracker.
+
+### [FIXED] F-015 — Local write + sync-queue enqueue not transactional in several writers
+
+- **Original severity**: Medium
+- **Phase**: 7 — Data Integrity & Write Concurrency
+- **Files changed**: `src/lib/db/attendance.ts` (create/update), `src/lib/db/students.ts` (create/update/softDelete), `src/lib/db/university.ts` (8 creators/updaters), `src/lib/db/user-sections.ts` (createUserSection/createUserSubject/updateUserRole)
+- **Re-verification (Step 1)**: Confirmed — all listed writers still did `put(...)` then `syncQueue.add(...)` bare; only `archiveSessions`/`createStudentsBulk` wrapped transactions.
+- **Root cause (Step 2)**: Dexie writes to two tables without a transaction are two independent commits; a crash (tab kill, power loss, exception) between them leaves a permanent local/remote divergence: a row that never syncs, or a queue item pointing at a nonexistent row (poison-pill fodder).
+- **Edge cases enumerated (Step 3)**: crash between put and add → put rolled back with the failed enqueue; enqueue failure (e.g., quota) → row write aborted, caller sees the throw; softDeleteStudent on missing row → clean no-op inside tx, zero queue items; createUserSubject's uniqueness pre-check raced a concurrent creator → check moved inside the transaction so check-and-write is atomic; analytics-cache invalidation for attendance writes → moved inside the tx (cachedAnalytics added to scope) so cache state matches committed data; existing transactional writers (createStudentsBulk, archiveSessions, deactivateDepartmentAdmin, deleteSection, subjects.ts, user-sections deletes) → untouched; payload shapes unchanged → queued items from before the fix remain compatible.
+- **Fix design considered (Step 4)**: (a) global outbox pattern rewriting the persistence layer — rejected: massive blast radius beyond the finding; (b) wrap each writer's full read-check-write-enqueue sequence in `db.transaction('rw', [...])`, mirroring the codebase's own established pattern (createStudentsBulk/archiveSessions) — chosen.
+- **Fix applied (Step 5)**: 15 writers wrapped as designed; `invalidateAnalyticsCache` signature narrowed to `sectionId` (its unused universityId param removed) and its call moved into the attendance transactions.
+- **Tests added/modified (Step 6)**: `src/lib/db/transactional-writes.test.ts` — createStudent rollback (queue-add rejection leaves NO student row), createAttendanceSession rollback, updateStudent rollback preserving the prior row, happy path still persists exactly one row + one queue item, missing-student soft-delete no-op. The three rollback tests FAILED pre-fix (proven empirically via stash: rows persisted despite the rejected enqueue).
+- **Full verification result (Step 7)**: identical to F-011 entry — all four gates green.
+- **Interactions with prior fixes**: F-009/F-010 (Phase 6) queue-consumer logic untouched; user-sections.ts writers were not named in the audit's location list but exhibit the exact defect mechanism the finding describes — included here rather than leaving a known instance open; noted below as a deliberate scope extension.
+- **Residual risk / follow-ups**: none known within the Dexie layer; server-side partial-failure semantics remain Phase 6's concern.
+- **Commit**: see tracker.
+
+### [FIXED] F-016 — Concurrent/offline period creation collides on deterministic IDs; no DB constraint backs period numbers
+
+- **Original severity**: Medium
+- **Phase**: 7 — Data Integrity & Write Concurrency
+- **Files changed**: `supabase/migrations/023_attendance_period_unique.sql` (new, append-only), `src/app/(dashboard)/attendance/page.tsx` (sessionId generation), `src/lib/db/sync.ts` (23505 handling)
+- **Re-verification (Step 1)**: Confirmed — session ids were still `${subjectId}_${date}_${periodNumber}` computed from locally-derived inputs, and no UNIQUE(subject_id, date, period_number) existed anywhere in migrations 001–022 (grep-verified).
+- **Root cause (Step 2)**: two independent devices each computed `getNextPeriodNumber` from their own local Dexie and converged on an identical primary key, so the upsert stream silently last-write-won one device's records over the other's; the database had no constraint to even represent "one session per subject/date/period" as an invariant.
+- **Edge cases enumerated (Step 3)**: two devices creating the same period concurrently → distinct UUID rows now race to the remote insert; loser hits 23505 and is dead-lettered immediately (retry of an identical payload can never succeed), keeping the records inspectable instead of silently discarded or churning backoff; legacy composite-id rows → format-opaque everywhere (ids are never parsed), constraint applies to columns not ids; duplicate-free precondition for the migration → documented in-file (deterministic ids made duplicates structurally impossible); non-attendance 23505 (e.g., student dupes feeding F-017) → unchanged backoff/dead-letter path, explicitly regression-tested; offline creation then later pull shows the period taken → next creation computes max+1 from pulled rows; remaining small race window between pull and save → surfaced honestly via dead-letter + 'failed' sync status rather than hidden; getNextPeriodNumber remains client-local → inherent offline-first limitation, noted as residual; backup/restore flows → id-format agnostic (upsert by opaque id).
+- **Fix design considered (Step 4)**: (a) keep composite ids + add only the DB constraint — rejected: converging ids preserve the silent-overwrite behavior the finding condemns, just deduplicated; (b) UUID ids + append-only unique constraint + fast-dead-letter conflict resolution in the queue consumer — chosen (matches audit's stated direction; composes with Phase 6's revision machinery which continues to govern update-path conflicts).
+- **Fix applied (Step 5)**: migration 023 adds `attendance_sessions_subject_date_period_unique`; attendance page generates `crypto.randomUUID()` session ids; `processSyncQueue` dead-letters attendance-session creates on 23505 in a single pass (retryCount := MAX_RETRIES, lease released) while all other collections keep normal backoff.
+- **Tests added/modified (Step 6)**: `src/test/migrations-023.test.ts` — constraint exists covering exactly the three columns, append-only numbering past 022, no revision/trigger interference. `src/lib/db/sync.test.ts` — same-period create conflict dead-letters in ONE pass with status 'failed' (failed pre-fix: retryCount was 1); non-attendance 23505 still schedules backoff (regression guard). Both failed pre-fix empirically.
+- **Full verification result (Step 7)**: identical to F-011 entry — all four gates green. Docker-absent caveat as before: constraint behavior verified structurally plus by exhaustive client-path tracing; confirm live when migrations apply.
+- **Interactions with prior fixes**: Phase 6's F-010 revision counter untouched (update-path conflicts unchanged); Phase 6 lead "deterministic attendance-session IDs can collide" is closed by this fix; F-009 dead-letter UX remains the resolution surface for conflicted creates.
+- **Residual risk / follow-ups**: a dead-lettered losing create requires manual resolution (clear + re-pull, then mark as edit) — acceptable and visible; auto-merge of concurrent attendance markings remains out of scope by design.
+- **Commit**: see tracker.

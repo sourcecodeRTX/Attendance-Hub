@@ -635,3 +635,54 @@ describe('F-010 — revision-based attendance conflict resolution', () => {
     expect(local?.revision).toBe(7);
   });
 });
+
+describe('F-016 — same-period create conflict (unique constraint, migration 023)', () => {
+  const dupError = {
+    code: '23505',
+    message: 'duplicate key value violates unique constraint "attendance_sessions_subject_date_period_unique"',
+  };
+
+  it('dead-letters an attendance create that hits the unique constraint in a single pass', async () => {
+    // Another device already created this subject/date/period remotely; the
+    // UUID-id loser can never succeed on retry.
+    remoteTables['attendance_sessions'] = { upsertError: dupError };
+
+    await db.syncQueue.add(
+      makeQueueItem({
+        type: 'create',
+        collection: 'attendance_sessions',
+        docId: 'sess-dup',
+        data: { id: 'sess-dup' },
+      })
+    );
+
+    await processSyncQueue();
+
+    const items = await db.syncQueue.toArray();
+    expect(items).toHaveLength(1);
+    expect(items[0].retryCount).toBe(5);
+    expect(items[0].claimedAt).toBe('');
+    expect(useUIStore.getState().syncStatus).toBe('failed');
+  });
+
+  it('non-attendance 23505 failures still go through normal backoff retries', async () => {
+    remoteTables['students'] = { upsertError: dupError };
+
+    await db.syncQueue.add(
+      makeQueueItem({
+        type: 'create',
+        collection: 'students',
+        docId: 'stu-dup',
+        data: { id: 'stu-dup' },
+      })
+    );
+
+    await processSyncQueue();
+
+    const items = await db.syncQueue.toArray();
+    expect(items).toHaveLength(1);
+    expect(items[0].retryCount).toBe(1);
+    expect(items[0].nextAttemptAt).toBeDefined();
+    expect(items[0].retryCount).toBeLessThan(5);
+  });
+});

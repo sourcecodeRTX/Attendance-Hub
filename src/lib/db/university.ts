@@ -33,44 +33,48 @@ export async function getDepartmentById(id: string): Promise<Department | undefi
 }
 
 export async function createDepartment(dept: Department, userId: string): Promise<void> {
-  await db.departments.put(dept);
-  await db.syncQueue.add({
-    universityId: dept.universityId,
-    ownerId: userId,
-    type: 'create',
-    collection: 'departments',
-    docId: dept.id,
-    data: {
-      id: dept.id,
-      university_id: dept.universityId,
-      name: dept.name,
-      code: dept.code,
-      admin_id: dept.adminId,
-      is_active: dept.isActive,
-      created_at: dept.createdAt,
-      created_by: dept.createdBy,
-    },
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
+  await db.transaction('rw', [db.departments, db.syncQueue], async () => {
+    await db.departments.put(dept);
+    await db.syncQueue.add({
+      universityId: dept.universityId,
+      ownerId: userId,
+      type: 'create',
+      collection: 'departments',
+      docId: dept.id,
+      data: {
+        id: dept.id,
+        university_id: dept.universityId,
+        name: dept.name,
+        code: dept.code,
+        admin_id: dept.adminId,
+        is_active: dept.isActive,
+        created_at: dept.createdAt,
+        created_by: dept.createdBy,
+      },
+      createdAt: new Date().toISOString(),
+      retryCount: 0,
+    });
   });
 }
 
 export async function updateDepartment(dept: Department, userId: string): Promise<void> {
-  await db.departments.put(dept);
-  await db.syncQueue.add({
-    universityId: dept.universityId,
-    ownerId: userId,
-    type: 'update',
-    collection: 'departments',
-    docId: dept.id,
-    data: {
-      name: dept.name,
-      code: dept.code,
-      admin_id: dept.adminId,
-      is_active: dept.isActive,
-    },
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
+  await db.transaction('rw', [db.departments, db.syncQueue], async () => {
+    await db.departments.put(dept);
+    await db.syncQueue.add({
+      universityId: dept.universityId,
+      ownerId: userId,
+      type: 'update',
+      collection: 'departments',
+      docId: dept.id,
+      data: {
+        name: dept.name,
+        code: dept.code,
+        admin_id: dept.adminId,
+        is_active: dept.isActive,
+      },
+      createdAt: new Date().toISOString(),
+      retryCount: 0,
+    });
   });
 }
 
@@ -87,43 +91,47 @@ export async function getBranches(universityId: string, departmentId?: string): 
 }
 
 export async function createBranch(branch: Branch, userId: string): Promise<void> {
-  await db.branches.put(branch);
-  await db.syncQueue.add({
-    universityId: branch.universityId,
-    ownerId: userId,
-    type: 'create',
-    collection: 'branches',
-    docId: branch.id,
-    data: {
-      id: branch.id,
-      university_id: branch.universityId,
-      department_id: branch.departmentId,
-      name: branch.name,
-      code: branch.code,
-      is_active: branch.isActive,
-      created_at: branch.createdAt,
-      created_by: branch.createdBy,
-    },
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
+  await db.transaction('rw', [db.branches, db.syncQueue], async () => {
+    await db.branches.put(branch);
+    await db.syncQueue.add({
+      universityId: branch.universityId,
+      ownerId: userId,
+      type: 'create',
+      collection: 'branches',
+      docId: branch.id,
+      data: {
+        id: branch.id,
+        university_id: branch.universityId,
+        department_id: branch.departmentId,
+        name: branch.name,
+        code: branch.code,
+        is_active: branch.isActive,
+        created_at: branch.createdAt,
+        created_by: branch.createdBy,
+      },
+      createdAt: new Date().toISOString(),
+      retryCount: 0,
+    });
   });
 }
 
 export async function updateBranch(branch: Branch, userId: string): Promise<void> {
-  await db.branches.put(branch);
-  await db.syncQueue.add({
-    universityId: branch.universityId,
-    ownerId: userId,
-    type: 'update',
-    collection: 'branches',
-    docId: branch.id,
-    data: {
-      name: branch.name,
-      code: branch.code,
-      is_active: branch.isActive,
-    },
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
+  await db.transaction('rw', [db.branches, db.syncQueue], async () => {
+    await db.branches.put(branch);
+    await db.syncQueue.add({
+      universityId: branch.universityId,
+      ownerId: userId,
+      type: 'update',
+      collection: 'branches',
+      docId: branch.id,
+      data: {
+        name: branch.name,
+        code: branch.code,
+        is_active: branch.isActive,
+      },
+      createdAt: new Date().toISOString(),
+      retryCount: 0,
+    });
   });
 }
 
@@ -136,45 +144,49 @@ export async function getSpecialisations(universityId: string, branchId?: string
 }
 
 export async function createSpecialisation(spec: Specialisation, userId: string): Promise<void> {
-  await db.specialisations.put(spec);
-  await db.syncQueue.add({
-    universityId: spec.universityId,
-    ownerId: userId,
-    type: 'create',
-    collection: 'specialisations',
-    docId: spec.id,
-    data: {
-      id: spec.id,
-      university_id: spec.universityId,
-      department_id: spec.departmentId,
-      branch_id: spec.branchId,
-      name: spec.name,
-      code: spec.code,
-      is_active: spec.isActive,
-      created_at: spec.createdAt,
-      created_by: spec.createdBy,
-    },
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
+  await db.transaction('rw', [db.specialisations, db.syncQueue], async () => {
+    await db.specialisations.put(spec);
+    await db.syncQueue.add({
+      universityId: spec.universityId,
+      ownerId: userId,
+      type: 'create',
+      collection: 'specialisations',
+      docId: spec.id,
+      data: {
+        id: spec.id,
+        university_id: spec.universityId,
+        department_id: spec.departmentId,
+        branch_id: spec.branchId,
+        name: spec.name,
+        code: spec.code,
+        is_active: spec.isActive,
+        created_at: spec.createdAt,
+        created_by: spec.createdBy,
+      },
+      createdAt: new Date().toISOString(),
+      retryCount: 0,
+    });
   });
 }
 
 export async function updateSpecialisation(spec: Specialisation, userId: string): Promise<void> {
-  await db.specialisations.put(spec);
-  await db.syncQueue.add({
-    universityId: spec.universityId,
-    ownerId: userId,
-    type: 'update',
-    collection: 'specialisations',
-    docId: spec.id,
-    data: {
-      name: spec.name,
-      code: spec.code,
-      branch_id: spec.branchId,
-      is_active: spec.isActive,
-    },
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
+  await db.transaction('rw', [db.specialisations, db.syncQueue], async () => {
+    await db.specialisations.put(spec);
+    await db.syncQueue.add({
+      universityId: spec.universityId,
+      ownerId: userId,
+      type: 'update',
+      collection: 'specialisations',
+      docId: spec.id,
+      data: {
+        name: spec.name,
+        code: spec.code,
+        branch_id: spec.branchId,
+        is_active: spec.isActive,
+      },
+      createdAt: new Date().toISOString(),
+      retryCount: 0,
+    });
   });
 }
 
@@ -274,28 +286,30 @@ export async function getSections(universityId: string, departmentId?: string): 
 }
 
 export async function createSection(section: Section, userId: string): Promise<void> {
-  await db.sections.put(section);
-  await db.syncQueue.add({
-    universityId: section.universityId,
-    ownerId: userId,
-    type: 'create',
-    collection: 'sections',
-    docId: section.id,
-    data: {
-      id: section.id,
-      university_id: section.universityId,
-      department_id: section.departmentId,
-      branch_id: section.branchId,
-      specialisation_id: section.specialisationId,
-      name: section.name,
-      primary_teacher_id: section.primaryTeacherId,
-      is_active: section.isActive,
-      is_archived: section.isArchived,
-      created_at: section.createdAt,
-      created_by: section.createdBy,
-    },
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
+  await db.transaction('rw', [db.sections, db.syncQueue], async () => {
+    await db.sections.put(section);
+    await db.syncQueue.add({
+      universityId: section.universityId,
+      ownerId: userId,
+      type: 'create',
+      collection: 'sections',
+      docId: section.id,
+      data: {
+        id: section.id,
+        university_id: section.universityId,
+        department_id: section.departmentId,
+        branch_id: section.branchId,
+        specialisation_id: section.specialisationId,
+        name: section.name,
+        primary_teacher_id: section.primaryTeacherId,
+        is_active: section.isActive,
+        is_archived: section.isArchived,
+        created_at: section.createdAt,
+        created_by: section.createdBy,
+      },
+      createdAt: new Date().toISOString(),
+      retryCount: 0,
+    });
   });
 }
 
@@ -348,20 +362,22 @@ export async function deleteSection(sectionId: string, universityId: string, use
 }
 
 export async function updateSection(section: Section, userId: string): Promise<void> {
-  await db.sections.put(section);
-  await db.syncQueue.add({
-    universityId: section.universityId,
-    ownerId: userId,
-    type: 'update',
-    collection: 'sections',
-    docId: section.id,
-    data: {
-      name: section.name,
-      primary_teacher_id: section.primaryTeacherId,
-      is_active: section.isActive,
-      is_archived: section.isArchived,
-    },
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
+  await db.transaction('rw', [db.sections, db.syncQueue], async () => {
+    await db.sections.put(section);
+    await db.syncQueue.add({
+      universityId: section.universityId,
+      ownerId: userId,
+      type: 'update',
+      collection: 'sections',
+      docId: section.id,
+      data: {
+        name: section.name,
+        primary_teacher_id: section.primaryTeacherId,
+        is_active: section.isActive,
+        is_archived: section.isArchived,
+      },
+      createdAt: new Date().toISOString(),
+      retryCount: 0,
+    });
   });
 }

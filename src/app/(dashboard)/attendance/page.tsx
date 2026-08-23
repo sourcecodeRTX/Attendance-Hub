@@ -19,6 +19,7 @@ import { getSubjects, getSubjectById } from '@/lib/db/subjects';
 import { getUserSubjects, getPrimarySectionId, getSubjectTeachers } from '@/lib/db/user-sections';
 import { getSections } from '@/lib/db/university';
 import { logActivity } from '@/lib/db/activity';
+import { useLocalDateString } from '@/hooks/use-local-date';
 
 import type {
   AttendanceSession,
@@ -78,10 +79,6 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function getTodayUTC(): string {
-  return new Date().toISOString().split('T')[0];
-}
 
 function formatDateLabel(dateStr: string): string {
   const [y, m, d] = dateStr.split('-');
@@ -162,7 +159,7 @@ export default function AttendancePage() {
   const [attendanceView, setAttendanceView] = useState<'today' | 'history'>('today');
 
   // ---- derived ----
-  const today = getTodayUTC();
+  const today = useLocalDateString();
   const isTeacher =
     user?.role === 'primary_teacher' || user?.role === 'regular_teacher';
   const isCR = user?.role === 'cr';
@@ -521,7 +518,11 @@ export default function AttendancePage() {
 
       if (isNewSession) {
         const periodNumber = nextPeriod;
-        const sessionId = `${selectedSubjectId}_${today}_${periodNumber}`;
+        // UUID id: deterministic composite ids made two devices creating the
+        // same period converge on one row and silently overwrite each other
+        // (F-016). Genuine same-period races are now caught server-side by
+        // the UNIQUE(subject_id, date, period_number) constraint (migration 023).
+        const sessionId = crypto.randomUUID();
 
         const session: AttendanceSession = {
           id: sessionId,

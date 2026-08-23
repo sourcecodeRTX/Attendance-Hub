@@ -199,16 +199,33 @@ export async function processSyncQueue(): Promise<void> {
 
       hadFailure = true;
       if (item.id !== undefined) {
-        const nextRetryCount = (item.retryCount || 0) + 1;
-        await db.syncQueue.update(item.id, {
-          retryCount: nextRetryCount,
-          // Release the lease so the next pass can retry after backoff.
-          claimedAt: '',
-          nextAttemptAt:
-            nextRetryCount < MAX_RETRIES
-              ? new Date(Date.now() + backoffDelayMs(nextRetryCount)).toISOString()
-              : undefined,
-        });
+        if (
+          errorCode === '23505' &&
+          item.collection === 'attendance_sessions' &&
+          item.type === 'create'
+        ) {
+          // Permanent conflict: another device already created a session for
+          // this subject/date/period (UNIQUE constraint, migration 023).
+          // Retrying the identical payload can never succeed — dead-letter
+          // immediately and surface it for explicit resolution instead of
+          // churning through the backoff schedule.
+          await db.syncQueue.update(item.id, {
+            retryCount: MAX_RETRIES,
+            claimedAt: '',
+            nextAttemptAt: undefined,
+          });
+        } else {
+          const nextRetryCount = (item.retryCount || 0) + 1;
+          await db.syncQueue.update(item.id, {
+            retryCount: nextRetryCount,
+            // Release the lease so the next pass can retry after backoff.
+            claimedAt: '',
+            nextAttemptAt:
+              nextRetryCount < MAX_RETRIES
+                ? new Date(Date.now() + backoffDelayMs(nextRetryCount)).toISOString()
+                : undefined,
+          });
+        }
       }
     }
   }

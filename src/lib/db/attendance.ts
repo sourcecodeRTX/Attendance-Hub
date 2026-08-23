@@ -30,55 +30,61 @@ export async function createAttendanceSession(
   session: AttendanceSession,
   userId: string
 ): Promise<void> {
-  await db.attendanceSessions.put(session);
-  await db.syncQueue.add({
-    universityId: session.universityId,
-    ownerId: userId,
-    type: 'create',
-    collection: 'attendance_sessions',
-    docId: session.id,
-    data: {
-      id: session.id,
-      university_id: session.universityId,
-      department_id: session.departmentId,
-      section_id: session.sectionId,
-      subject_id: session.subjectId,
-      date: session.date,
-      period_number: session.periodNumber,
-      period_label: session.periodLabel,
-      records: session.records,
-      locked_by_teacher: session.lockedByTeacher,
-      is_archived: session.isArchived,
-      created_by: session.createdBy,
-      last_modified_by: session.lastModifiedBy,
-      created_at: session.createdAt,
-    },
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
+  // Local write and queue enqueue must commit together (F-015) — a crash
+  // between them would leave a row that never syncs.
+  await db.transaction('rw', [db.attendanceSessions, db.syncQueue, db.cachedAnalytics], async () => {
+    await db.attendanceSessions.put(session);
+    await db.syncQueue.add({
+      universityId: session.universityId,
+      ownerId: userId,
+      type: 'create',
+      collection: 'attendance_sessions',
+      docId: session.id,
+      data: {
+        id: session.id,
+        university_id: session.universityId,
+        department_id: session.departmentId,
+        section_id: session.sectionId,
+        subject_id: session.subjectId,
+        date: session.date,
+        period_number: session.periodNumber,
+        period_label: session.periodLabel,
+        records: session.records,
+        locked_by_teacher: session.lockedByTeacher,
+        is_archived: session.isArchived,
+        created_by: session.createdBy,
+        last_modified_by: session.lastModifiedBy,
+        created_at: session.createdAt,
+      },
+      createdAt: new Date().toISOString(),
+      retryCount: 0,
+    });
+    await invalidateAnalyticsCache(session.sectionId);
   });
-  await invalidateAnalyticsCache(session.universityId, session.sectionId);
 }
 
 export async function updateAttendanceSession(
   session: AttendanceSession,
   userId: string
 ): Promise<void> {
-  await db.attendanceSessions.put(session);
-  await db.syncQueue.add({
-    universityId: session.universityId,
-    ownerId: userId,
-    type: 'update',
-    collection: 'attendance_sessions',
-    docId: session.id,
-    data: {
-      records: session.records,
-      locked_by_teacher: session.lockedByTeacher,
-      last_modified_by: session.lastModifiedBy,
-    },
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
+  await db.transaction('rw', [db.attendanceSessions, db.syncQueue, db.cachedAnalytics], async () => {
+    await db.attendanceSessions.put(session);
+    await db.syncQueue.add({
+      universityId: session.universityId,
+      ownerId: userId,
+      type: 'update',
+      collection: 'attendance_sessions',
+      docId: session.id,
+      data: {
+        records: session.records,
+        locked_by_teacher: session.lockedByTeacher,
+        last_modified_by: session.lastModifiedBy,
+      },
+      createdAt: new Date().toISOString(),
+      retryCount: 0,
+    });
+    await invalidateAnalyticsCache(session.sectionId);
   });
-  await invalidateAnalyticsCache(session.universityId, session.sectionId);
 }
 
 export async function archiveSessions(sessionIds: string[], universityId: string, userId: string): Promise<void> {
@@ -102,7 +108,7 @@ export async function archiveSessions(sessionIds: string[], universityId: string
   });
 }
 
-async function invalidateAnalyticsCache(universityId: string, sectionId: string): Promise<void> {
+async function invalidateAnalyticsCache(sectionId: string): Promise<void> {
   await db.cachedAnalytics
     .where('id')
     .startsWith(`section_${sectionId}`)

@@ -20,24 +20,26 @@ export async function getPrimarySectionId(userId: string): Promise<string | null
 }
 
 export async function createUserSection(us: UserSection, currentUserId: string): Promise<void> {
-  await db.userSections.put(us);
-  await db.syncQueue.add({
-    universityId: us.universityId,
-    ownerId: currentUserId,
-    type: 'create',
-    collection: 'user_sections',
-    docId: us.id,
-    data: {
-      id: us.id,
-      university_id: us.universityId,
-      user_id: us.userId,
-      section_id: us.sectionId,
-      user_role: us.userRole,
-      assigned_at: us.assignedAt,
-      assigned_by: us.assignedBy,
-    },
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
+  await db.transaction('rw', [db.userSections, db.syncQueue], async () => {
+    await db.userSections.put(us);
+    await db.syncQueue.add({
+      universityId: us.universityId,
+      ownerId: currentUserId,
+      type: 'create',
+      collection: 'user_sections',
+      docId: us.id,
+      data: {
+        id: us.id,
+        university_id: us.universityId,
+        user_id: us.userId,
+        section_id: us.sectionId,
+        user_role: us.userRole,
+        assigned_at: us.assignedAt,
+        assigned_by: us.assignedBy,
+      },
+      createdAt: new Date().toISOString(),
+      retryCount: 0,
+    });
   });
 }
 
@@ -70,35 +72,38 @@ export async function getSubjectTeachers(subjectId: string): Promise<UserSubject
 }
 
 export async function createUserSubject(us: UserSubject, currentUserId: string): Promise<void> {
-  // Check if the combination already exists
-  const existing = await db.userSubjects
-    .where(['subjectId', 'sectionId'])
-    .equals([us.subjectId, us.sectionId])
-    .first();
-  
-  if (existing) {
-    if (existing.userId === us.userId) return; // Already assigned to this user
-    throw new Error('This subject-section combination is already assigned to another teacher.');
-  }
+  // Uniqueness check and write commit together (F-015) so a concurrent
+  // creator cannot slip past the check mid-transaction.
+  await db.transaction('rw', [db.userSubjects, db.syncQueue], async () => {
+    const existing = await db.userSubjects
+      .where(['subjectId', 'sectionId'])
+      .equals([us.subjectId, us.sectionId])
+      .first();
 
-  await db.userSubjects.put(us);
-  await db.syncQueue.add({
-    universityId: us.universityId,
-    ownerId: currentUserId,
-    type: 'create',
-    collection: 'user_subjects',
-    docId: us.id,
-    data: {
-      id: us.id,
-      university_id: us.universityId,
-      user_id: us.userId,
-      subject_id: us.subjectId,
-      section_id: us.sectionId,
-      assigned_at: us.assignedAt,
-      assigned_by: us.assignedBy,
-    },
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
+    if (existing) {
+      if (existing.userId === us.userId) return; // Already assigned to this user
+      throw new Error('This subject-section combination is already assigned to another teacher.');
+    }
+
+    await db.userSubjects.put(us);
+    await db.syncQueue.add({
+      universityId: us.universityId,
+      ownerId: currentUserId,
+      type: 'create',
+      collection: 'user_subjects',
+      docId: us.id,
+      data: {
+        id: us.id,
+        university_id: us.universityId,
+        user_id: us.userId,
+        subject_id: us.subjectId,
+        section_id: us.sectionId,
+        assigned_at: us.assignedAt,
+        assigned_by: us.assignedBy,
+      },
+      createdAt: new Date().toISOString(),
+      retryCount: 0,
+    });
   });
 }
 
@@ -148,18 +153,19 @@ export async function updateUserRole(
   if (!user) throw new Error('User not found');
 
   const updatedUser = { ...user, role: newRole };
-  await db.users.put(updatedUser);
-  
-  await db.syncQueue.add({
-    universityId,
-    ownerId: currentUserId,
-    type: 'update',
-    collection: 'users',
-    docId: userId,
-    data: {
-      role: newRole,
-    },
-    createdAt: new Date().toISOString(),
-    retryCount: 0,
+  await db.transaction('rw', [db.users, db.syncQueue], async () => {
+    await db.users.put(updatedUser);
+    await db.syncQueue.add({
+      universityId,
+      ownerId: currentUserId,
+      type: 'update',
+      collection: 'users',
+      docId: userId,
+      data: {
+        role: newRole,
+      },
+      createdAt: new Date().toISOString(),
+      retryCount: 0,
+    });
   });
 }
