@@ -32,7 +32,7 @@ Source of truth for *how it's being fixed*: this file.
 | 22 | Low Sweep — Final Docs/Text | Complete | 2026-08-31 | da34078 |
 | 23 | Compressed Re-Audit | Complete | 2026-08-31 | df42f71 |
 | 24 | Final Docs/README Sync | Complete | 2026-08-31 | 3edfec6 |
-| 25 | Closing Report | Complete | 2026-08-31 | docs(phase25): closing report |
+| 25 | Closing Report | Complete | 2026-08-31 | 94e717c |
 
 Status values: `Not started` / `In progress (partial — see notes)` / `Complete`
 
