@@ -30,7 +30,7 @@ Source of truth for *how it's being fixed*: this file.
 | 20 | Low Sweep — Ops/Tooling | Complete | 2026-08-31 | 43fa22d |
 | 21 | CI Foundation | Complete | 2026-08-31 | 6d76ee7 |
 | 22 | Low Sweep — Final Docs/Text | Complete | 2026-08-31 | da34078 |
-| 23 | Compressed Re-Audit | Complete | 2026-08-31 | |
+| 23 | Compressed Re-Audit | Complete | 2026-08-31 | df42f71 |
 | 24 | Final Docs/README Sync | Not started | | |
 | 25 | Closing Report | Not started | | |
 
@@ -1139,7 +1139,7 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
   - `pnpm run build` EXIT=0 (all 24 static routes prerender clean).
 - **Interactions with prior fixes**: Confirms and reinforces all fixes from Phases 0 through 22. Zero regressions detected.
 - **Residual risk / follow-ups**: None. Codebase is in pristine condition ready for Phase 24 (Final Docs/README Sync).
-- **Commit**: see tracker.
+- **Commit**: df42f71 — audit(phase23): compressed re-audit — multi-subsystem regression verification suite and full codebase audit
 
 
 
