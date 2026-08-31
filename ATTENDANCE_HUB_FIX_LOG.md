@@ -29,7 +29,7 @@ Source of truth for *how it's being fixed*: this file.
 | 19 | Low Sweep — Frontend UX/A11y Polish | Complete | 2026-08-31 | bca3ad1 |
 | 20 | Low Sweep — Ops/Tooling | Complete | 2026-08-31 | 43fa22d |
 | 21 | CI Foundation | Complete | 2026-08-31 | 6d76ee7 |
-| 22 | Low Sweep — Final Docs/Text | Complete | 2026-08-31 | b68f219 |
+| 22 | Low Sweep — Final Docs/Text | Complete | 2026-08-31 | da34078 |
 | 23 | Compressed Re-Audit | Not started | | |
 | 24 | Final Docs/README Sync | Not started | | |
 | 25 | Closing Report | Not started | | |
@@ -1099,6 +1099,6 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
   - `pnpm run build` EXIT=0 (all 24 routes prerender clean).
 - **Interactions with prior fixes**: Reconciles remaining audit findings and low sweep text items; preserves Phase 19/20/21 UX, tooling, and CI pipeline invariants.
 - **Residual risk / follow-ups**: None.
-- **Commit**: [will be committed in next step]
+- **Commit**: da34078 — fix(phase22): low sweep final docs and text — closes: Landing page marketing honesty, dead footer links, and doc sync
 
 
