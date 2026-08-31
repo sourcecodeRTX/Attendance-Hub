@@ -330,11 +330,12 @@ export async function deleteSection(sectionId: string, universityId: string, use
   const links = await db.subjectSections.where('sectionId').equals(sectionId).toArray();
   const linkedSubjectIds = [...new Set(links.map((l) => l.subjectId))];
 
-  await db.transaction('rw', [db.sections, db.userSections, db.userSubjects, db.subjects, db.subjectSections, db.attendanceSessions, db.syncQueue], async () => {
+  await db.transaction('rw', [db.sections, db.userSections, db.userSubjects, db.subjects, db.subjectSections, db.attendanceSessions, db.cachedAnalytics, db.syncQueue], async () => {
     await db.userSections.where('sectionId').equals(sectionId).delete();
     await db.userSubjects.where('sectionId').equals(sectionId).delete();
     await db.attendanceSessions.where('sectionId').equals(sectionId).delete();
     await db.subjectSections.where('sectionId').equals(sectionId).delete();
+    await db.cachedAnalytics.where('sectionId').equals(sectionId).delete();
 
     // Subjects left with no remaining section link are no longer taught
     // anywhere — remove them locally and queue their remote deletion (the

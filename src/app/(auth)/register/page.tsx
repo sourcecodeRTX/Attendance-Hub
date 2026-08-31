@@ -32,7 +32,7 @@ type RegisterFormInput = z.infer<typeof registerFormSchema>;
 export default function RegisterPage() {
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
-  const { user, isLoading: authLoading } = useAuthStore();
+  const { user, isVerified, isLoading: authLoading } = useAuthStore();
   const redirectedRef = useRef(false);
 
   const getNextPath = useCallback(() => {
@@ -57,10 +57,10 @@ export default function RegisterPage() {
   }, [getNextPath]);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading && isVerified && user) {
       navigateAfterAuth(getNextPath());
     }
-  }, [authLoading, user, navigateAfterAuth, getNextPath]);
+  }, [authLoading, isVerified, user, navigateAfterAuth, getNextPath]);
 
   const {
     register,

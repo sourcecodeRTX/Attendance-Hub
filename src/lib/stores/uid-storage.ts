@@ -14,8 +14,12 @@ function scopedKey(baseKey: string): string {
   return currentUid ? `${baseKey}-${currentUid}` : baseKey;
 }
 
+function isStorageAvailable(): boolean {
+  return typeof window !== 'undefined' && typeof localStorage !== 'undefined';
+}
+
 function migrateLegacyKey(baseKey: string) {
-  if (!currentUid) return;
+  if (!currentUid || !isStorageAvailable()) return;
 
   const oldKey = baseKey;
   const newKey = `${baseKey}-${currentUid}`;
@@ -36,29 +40,48 @@ function migrateLegacyKey(baseKey: string) {
 export function createUidStorage(baseKey: string): StateStorage {
   return {
     getItem: () => {
+      if (!isStorageAvailable()) return null;
       migrateLegacyKey(baseKey);
-      return localStorage.getItem(scopedKey(baseKey));
+      try {
+        return localStorage.getItem(scopedKey(baseKey));
+      } catch {
+        return null;
+      }
     },
     setItem: (_, value) => {
-      localStorage.setItem(scopedKey(baseKey), value);
+      if (!isStorageAvailable()) return;
+      try {
+        localStorage.setItem(scopedKey(baseKey), value);
+      } catch (error) {
+        console.warn(`Failed setting storage key: ${baseKey}`, error);
+      }
     },
     removeItem: () => {
-      localStorage.removeItem(scopedKey(baseKey));
+      if (!isStorageAvailable()) return;
+      try {
+        localStorage.removeItem(scopedKey(baseKey));
+      } catch (error) {
+        console.warn(`Failed removing storage key: ${baseKey}`, error);
+      }
     },
   };
 }
 
 export function clearUidScopedStores(uid: string | null) {
-  if (!uid) return;
+  if (!uid || !isStorageAvailable()) return;
   const suffix = `-${uid}`;
   const keysToDelete: string[] = [];
 
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.endsWith(suffix)) {
-      keysToDelete.push(key);
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.endsWith(suffix)) {
+        keysToDelete.push(key);
+      }
     }
-  }
 
-  keysToDelete.forEach((key) => localStorage.removeItem(key));
+    keysToDelete.forEach((key) => localStorage.removeItem(key));
+  } catch (error) {
+    console.warn('Failed clearing uid scoped stores', error);
+  }
 }

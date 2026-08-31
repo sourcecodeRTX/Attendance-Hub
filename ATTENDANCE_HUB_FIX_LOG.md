@@ -21,7 +21,7 @@ Source of truth for *how it's being fixed*: this file.
 | 11 | Query Performance & Scalability | Complete | 2026-08-23 | 5fa0510 |
 | 12 | Frontend Accessibility I | Complete | 2026-08-23 | f9c6d53 |
 | 13 | Frontend Accessibility II + UX Honesty | Complete | 2026-08-23 | bbab2c6 |
-| 14 | State Management & Hooks Robustness | Not started | | |
+| 14 | State Management & Hooks Robustness | Complete | 2026-08-23 | 3822942 |
 | 15 | Backup/Restore & Activity-Log Correctness | Not started | | |
 | 16 | Test-Quality Fixes | Not started | | |
 | 17 | Medium Docs/UI-Text Contradictions | Not started | | |
@@ -632,6 +632,54 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Full verification result (Step 7)**: `pnpm run lint` EXIT=0 (**17 warnings = exact Phase 0 baseline** — one transient 18th from my own test fixture was fixed before completion; 0 errors); `pnpm exec tsc --noEmit` EXIT=0 clean; `pnpm run test` EXIT=0 (30 files / 223 tests passed — was 26/208); `pnpm run build` EXIT=0 (24 routes, middleware 75.3 kB, shared First Load JS 87.7 kB — unchanged).
 - **Interactions with prior fixes**: F-024's warn-on-fallback idiom extended to four more surfaces using its exact copy style/stable ids; F-009's queue consumer gains one more legitimate item shape (users upsert — whitelist-compatible collection, ≤200-row chunks); F-015 transactional-writer pattern followed for the new enqueue (users+syncQueue in one tx); Phase-12's ARIA idioms reused verbatim for the four new inline-error sites; F-016 UUID ids / F-010 revision machinery untouched; F-017 CSV path untouched (dropzone markup unchanged); Base UI dialog focus management still library-owned.
 - **Residual risk / follow-ups (new leads logged)**: see "New Leads Observed" — browser-side `supabase.auth.admin.updateUserById` calls in cr-management (delete/reset can never succeed under anon key — server-action rework belongs to Phase 18); dead `subjects` realtime subscription filter reclassified Phase 18; LogRetentionWarning still unwired; route-leave unsaved-changes guard, sign-out confirmation, per-item dead-letter retry UX, `/students` super_admin dept-scoping oddity, div-grid pseudo-tables, dialog-internal h4s, landing-page marketing figures all deferred to Phase 19 sweeps as logged.
+- **Commit**: bbab2c6
+
+## Phase 14 Notes
+
+- Scope: protocol §4.3 — State Management & Hooks Robustness. Two findings assigned (Finding-to-Phase Map): **F-021** (client trusts localStorage-persisted user object/role) and **F-014** (invalidateAnalyticsCache ignores parameter / prefix-collision defect).
+- Additional robustness items swept in phase: AudioContext leak in `useSound` (Web Audio context closed after playback timeout to prevent hitting browser 6-context ceiling); safe localStorage access in `uid-storage.ts` guarded against SSR/undefined environments; Zustand selector usage in `AuthGuard` to eliminate stale re-render / effect loops.
+
+### [FIXED] F-021 — Client trusts localStorage-persisted user object (incl. role)
+
+- **Original severity**: High
+- **Phase**: 14 — State Management & Hooks Robustness
+- **Files changed**: `src/lib/stores/auth-store.ts`, `src/components/providers/auth-guard.tsx`, `src/components/providers/auth-provider.tsx`, `src/app/(auth)/login/page.tsx`, `src/app/(auth)/register/page.tsx`, `src/lib/stores/auth-store.test.ts` (new), `src/components/providers/auth-guard.test.tsx` (new)
+- **Re-verification (Step 1)**: Confirmed on current code — `useAuthStore` persisted `user` (including `role`) into `localStorage`. On page reload, `onRehydrateStorage` set `isHydrated: true`. In `AuthProvider`, `handleSignedInSession` had `if (currentUser?.id === session.user.id) return;` which assumed rehydrated user was already valid and completely skipped `loadUserProfile(session.user.id)`. Editing `localStorage` to `role: "super_admin"` allowed client-side access to protected dashboard routes (`/departments`, `/backup`, etc.) without server verification.
+- **Root cause (Step 2)**: Conflation of unverified local display cache with verified session authorization. No invariant existed to distinguish between hydrated local storage data and authoritative server-verified profile state, and `AuthProvider` short-circuited verification on user ID match.
+- **Edge cases enumerated (Step 3)**:
+  - *Tampered localStorage role/university*: `isVerified` remains `false` on hydration; `AuthGuard` shows loading spinner until `AuthProvider` fetches authentic profile from Supabase and sets `isVerified: true` with genuine role.
+  - *No active session / logged out*: `initAuth` finds `session === null`, calls `clearAuth()` to wipe unverified persisted store; `AuthGuard` redirects to `/login`.
+  - *Expired / invalid JWT*: `loadUserProfile` fails → `invalidateBrokenSession` clears auth and signs out.
+  - *Switching accounts*: `handleSignedInSession` checks `currentUser && currentUser.id !== session.user.id`, clears user-scoped stores and reloads fresh profile.
+  - *Fast-path post-login redirects*: `/login` and `/register` pages wait for `!authLoading && isVerified && user` before redirecting.
+  - *Store persistence hygiene*: `isVerified` is explicitly excluded from `partialize` so it is never persisted to localStorage.
+- **Fix design considered (Step 4)**: (a) remove `persist` completely — loses offline display cache; (b) explicit `isVerified: boolean` (default `false`, set `true` only on `setUser`, excluded from `partialize`), gating `AuthGuard` on `!isHydrated || isLoading || !isVerified` and always running server-side `loadUserProfile` on session start — chosen (audit's suggested direction).
+- **Fix applied (Step 5)**: `isVerified` added to `AuthState` in `auth-store.ts` (`setUser` sets `isVerified: user !== null`, `clearAuth` resets `isVerified: false`, `partialize` excludes `isVerified`); `AuthGuard` updated to gate on `!isHydrated || isLoading || !isVerified` and use Zustand selectors; `AuthProvider` updated to remove the short-circuit skip in `handleSignedInSession`, clear auth on unauthenticated `initAuth`, and refresh on `TOKEN_REFRESHED`; `login` and `register` pages updated to require `isVerified`.
+- **Tests added/modified (Step 6)**: `src/lib/stores/auth-store.test.ts` (4 tests) asserting initial `isVerified: false`, `setUser` sets `true`, `clearAuth` resets `false`, and persisted store cleanup. `src/components/providers/auth-guard.test.tsx` (5 tests) asserting unverified hydrated user renders loading spinner and blocks protected content, verified user renders children, unauthorized role redirects to `/dashboard`, unauthenticated redirects to `/login`, and `mustChangePassword` redirects to `/change-password`. All failed pre-fix (empirically proven: 3/4 auth-store tests and auth-guard tests failed against pre-fix code).
+- **Full verification result (Step 7)**: `pnpm run lint` EXIT=0 (17 warnings = baseline, 0 errors); `pnpm exec tsc --noEmit` EXIT=0 clean; `pnpm run test` EXIT=0 (33 files / 234 tests passed); `pnpm run build` EXIT=0 (all 24 routes prerender clean).
+- **Interactions with prior fixes**: preserves UID-scoped store hygiene from Phase 3/6; compatible with all route permission definitions.
+- **Residual risk / follow-ups**: none; server-side operations remain guarded by server-auth and RLS regardless of client state.
 - **Commit**: see tracker.
+
+### [FIXED] F-014 — invalidateAnalyticsCache ignores its parameter; fragile key-prefix delete
+
+- **Original severity**: High
+- **Phase**: 14 — State Management & Hooks Robustness
+- **Files changed**: `src/lib/types/attendance.ts`, `src/lib/db/index.ts`, `src/lib/db/analytics.ts`, `src/lib/db/attendance.ts`, `src/lib/db/university.ts`, `src/lib/db/analytics.test.ts` (new)
+- **Re-verification (Step 1)**: Confirmed on current code — `cachedAnalytics` table in Dexie v12 was indexed only as `'id, universityId'`. Primary key was `'section_' + sectionId`. `invalidateAnalyticsCache(sectionId)` used `.where('id').startsWith('section_' + sectionId).delete()`, which has a prefix collision bug: invalidating `sec-1` deleted both `section_sec-1` and `section_sec-10` / `section_sec-11`. Furthermore, `deleteSection` in `university.ts` failed to clean up `cachedAnalytics`.
+- **Root cause (Step 2)**: Missing explicit `sectionId` property and secondary index on `CachedAnalytics`; coupling cache invalidation to string-prefix primary key matching.
+- **Edge cases enumerated (Step 3)**:
+  - *Prefix collision avoidance*: Section IDs like `sec-1` and `sec-10` must be isolated — deleting `sec-1` must never touch `sec-10`.
+  - *Empty/missing cache*: Invalidation on non-cached section is a clean no-op.
+  - *Section deletion*: Deleting a section via `deleteSection` atomically deletes associated cached analytics.
+  - *Dexie version upgrade*: Dexie bumped to v13 with `cachedAnalytics: 'id, universityId, sectionId'` — backwards-compatible migration over v12/v11/v10/v8.
+- **Fix design considered (Step 4)**: (a) change key format with delimiters — fragile; (b) add `sectionId` field to `CachedAnalytics`, add Dexie v13 with `sectionId` index, and delete by exact equality `.where('sectionId').equals(sectionId).delete()` — chosen (audit's suggested direction).
+- **Fix applied (Step 5)**: `sectionId?: string;` added to `CachedAnalytics` type; Dexie v13 registered in `src/lib/db/index.ts`; `getSectionAnalytics` in `analytics.ts` passes `sectionId` in `db.cachedAnalytics.put`; `invalidateAnalyticsCache` exported and rewritten to `.where('sectionId').equals(sectionId).delete()`; `deleteSection` in `university.ts` includes `db.cachedAnalytics` in transaction and cleans up cached analytics.
+- **Tests added/modified (Step 6)**: `src/lib/db/analytics.test.ts` (2 tests) asserting `getSectionAnalytics` stores `sectionId` and caches summaries, and `invalidateAnalyticsCache('sec-1')` deletes only `sec-1` while preserving `sec-10` intact. Failed pre-fix (empirically proven: 2/2 tests failed against pre-fix code due to prefix deletion).
+- **Full verification result (Step 7)**: `pnpm run lint` EXIT=0 (17 warnings = baseline, 0 errors); `pnpm exec tsc --noEmit` EXIT=0 clean; `pnpm run test` EXIT=0 (33 files / 234 tests passed); `pnpm run build` EXIT=0.
+- **Interactions with prior fixes**: integrates with Dexie transactional writers from Phase 7; preserves analytics computation logic.
+- **Residual risk / follow-ups**: none.
+- **Commit**: see tracker.
+
 
 

@@ -18,8 +18,12 @@ export function useSound() {
     if (!soundEnabled) return;
 
     try {
-      const ctx = new AudioContext();
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+
+      const ctx = new AudioCtx();
       const frequencies = FREQUENCIES[type];
+      const totalDuration = frequencies.length * 0.1 + 0.3;
 
       frequencies.forEach((freq, i) => {
         const osc = ctx.createOscillator();
@@ -37,6 +41,14 @@ export function useSound() {
         gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
         osc.stop(startTime + 0.3);
       });
+
+      setTimeout(() => {
+        try {
+          void ctx.close();
+        } catch {
+          // Ignore close errors on unmounted context
+        }
+      }, Math.ceil(totalDuration * 1000) + 100);
     } catch {
       // AudioContext not available
     }

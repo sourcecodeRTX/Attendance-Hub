@@ -108,9 +108,9 @@ export async function archiveSessions(sessionIds: string[], universityId: string
   });
 }
 
-async function invalidateAnalyticsCache(sectionId: string): Promise<void> {
+export async function invalidateAnalyticsCache(sectionId: string): Promise<void> {
   await db.cachedAnalytics
-    .where('id')
-    .startsWith(`section_${sectionId}`)
+    .where('sectionId')
+    .equals(sectionId)
     .delete();
 }

@@ -19,7 +19,7 @@ import { useAuthStore } from '@/lib/stores/auth-store';
 export default function LoginPage() {
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
-  const { user, isLoading: authLoading } = useAuthStore();
+  const { user, isVerified, isLoading: authLoading } = useAuthStore();
   const redirectedRef = useRef(false);
 
   const getNextPath = useCallback(() => {
@@ -44,7 +44,7 @@ export default function LoginPage() {
   }, [getNextPath]);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading && isVerified && user) {
       navigateAfterAuth(getNextPath());
       return;
     }
@@ -52,7 +52,7 @@ export default function LoginPage() {
     if (!authLoading && !user) {
       setIsLoading(false);
     }
-  }, [authLoading, user, navigateAfterAuth, getNextPath]);
+  }, [authLoading, isVerified, user, navigateAfterAuth, getNextPath]);
 
 
   const {

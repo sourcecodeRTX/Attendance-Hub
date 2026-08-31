@@ -9,10 +9,12 @@ interface AuthState {
   university: University | null;
   isLoading: boolean;
   isHydrated: boolean;
+  isVerified: boolean;
   setUser: (user: User | null) => void;
   setUniversity: (university: University | null) => void;
   setLoading: (loading: boolean) => void;
   setHydrated: (hydrated: boolean) => void;
+  setVerified: (verified: boolean) => void;
   clearAuth: () => void;
 }
 
@@ -23,11 +25,13 @@ export const useAuthStore = create<AuthState>()(
       university: null,
       isLoading: true,
       isHydrated: false,
-      setUser: (user) => set({ user }),
+      isVerified: false,
+      setUser: (user) => set({ user, isVerified: user !== null }),
       setUniversity: (university) => set({ university }),
       setLoading: (isLoading) => set({ isLoading }),
       setHydrated: (isHydrated) => set({ isHydrated }),
-      clearAuth: () => set({ user: null, university: null, isLoading: false }),
+      setVerified: (isVerified) => set({ isVerified }),
+      clearAuth: () => set({ user: null, university: null, isLoading: false, isVerified: false }),
     }),
     {
       name: 'auth-storage',

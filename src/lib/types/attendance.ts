@@ -70,6 +70,7 @@ export interface MonthAttendanceSummary {
 export interface CachedAnalytics {
   id: string;
   universityId: string;
+  sectionId?: string;
   data: SubjectAttendanceSummary[] | MonthAttendanceSummary[];
   computedAt: string;
 }

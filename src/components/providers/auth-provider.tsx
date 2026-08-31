@@ -179,7 +179,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const handleSignedInSession = async (session: { user: { id: string; email?: string } }) => {
       setCurrentUid(session.user.id);
       const currentUser = useAuthStore.getState().user;
-      if (currentUser?.id === session.user.id) return;
 
       // Prevent stale cross-account preferences/state on shared devices.
       if (currentUser && currentUser.id !== session.user.id) {
@@ -243,25 +242,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             console.error('Failed to clear Dexie on logout:', e);
           }
         } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-          const currentUser = useAuthStore.getState().user;
-          if (!currentUser) {
-            if (!initDone) {
-              pendingSessionRef.current = {
-                userId: session.user.id,
-                email: session.user.email,
-              };
-              return;
-            }
+          if (!initDone) {
+            pendingSessionRef.current = {
+              userId: session.user.id,
+              email: session.user.email,
+            };
+            return;
+          }
 
-            setLoading(true);
-            try {
-              const loaded = await loadUserProfile(session.user.id);
-              if (!loaded) {
-                await invalidateBrokenSession();
-              }
-            } finally {
-              setLoading(false);
+          setLoading(true);
+          try {
+            const loaded = await loadUserProfile(session.user.id);
+            if (!loaded) {
+              await invalidateBrokenSession();
             }
+          } finally {
+            setLoading(false);
           }
         }
       }
@@ -273,6 +269,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (error) {
           console.error('Error getting session:', error);
+          clearAuth();
+          setCurrentUid(null);
           setLoading(false);
           return;
         }
@@ -283,6 +281,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (!loaded) {
             await invalidateBrokenSession();
           }
+        } else {
+          // No active session — clear any stale unverified state from localStorage
+          clearAuth();
+          setCurrentUid(null);
         }
       } catch (error) {
         console.error('Auth init error:', error);

@@ -26,10 +26,13 @@ const ROUTE_PERMISSIONS: Record<string, UserRole[]> = {
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, isLoading, isHydrated, clearAuth } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const isHydrated = useAuthStore((s) => s.isHydrated);
+  const isVerified = useAuthStore((s) => s.isVerified);
 
   useEffect(() => {
-    if (!isHydrated || isLoading) return;
+    if (!isHydrated || isLoading || !isVerified) return;
 
     let cancelled = false;
 
@@ -37,7 +40,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       if (cancelled) return;
 
       if (!user) {
-        clearAuth();
         router.replace('/login');
         return;
       }
@@ -67,9 +69,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [user, isLoading, isHydrated, pathname, router, clearAuth]);
+  }, [user, isLoading, isHydrated, isVerified, pathname, router]);
 
-  if (!isHydrated || isLoading) {
+  if (!isHydrated || isLoading || !isVerified) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />

@@ -100,6 +100,7 @@ export async function getSectionAnalytics(
   await db.cachedAnalytics.put({
     id: cacheKey,
     universityId,
+    sectionId,
     data: summaries,
     computedAt: new Date().toISOString(),
   });
