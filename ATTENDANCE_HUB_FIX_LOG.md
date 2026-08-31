@@ -28,7 +28,7 @@ Source of truth for *how it's being fixed*: this file.
 | 18 | Low Sweep — Lib Correctness | Complete | 2026-08-31 | 4865476 |
 | 19 | Low Sweep — Frontend UX/A11y Polish | Complete | 2026-08-31 | bca3ad1 |
 | 20 | Low Sweep — Ops/Tooling | Complete | 2026-08-31 | 43fa22d |
-| 21 | CI Foundation | Complete | 2026-08-31 | |
+| 21 | CI Foundation | Complete | 2026-08-31 | 6d76ee7 |
 | 22 | Low Sweep — Final Docs/Text | Not started | | |
 | 23 | Compressed Re-Audit | Not started | | |
 | 24 | Final Docs/README Sync | Not started | | |
@@ -1057,5 +1057,5 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
   - `pnpm run build` EXIT=0 (all 24 routes prerender clean).
 - **Interactions with prior fixes**: Codifies the entire verification suite built across Phases 0–20 (`lint`, `tsc`, `vitest`, `build`, `typecheck` script from Phase 20) into an automated CI pipeline.
 - **Residual risk / follow-ups**: None.
-- **Commit**: see tracker.
+- **Commit**: 6d76ee7 — fix(phase21): CI foundation — GitHub Actions workflow and automated verification quality gates
 
