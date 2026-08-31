@@ -13,6 +13,7 @@ import { resetPasswordForEmail } from './auth';
 describe('resetPasswordForEmail redirect target', () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     resetPasswordForEmailMock.mockClear();
     resetPasswordForEmailMock.mockResolvedValue({ data: {}, error: null });
     delete process.env.NEXT_PUBLIC_APP_URL;
@@ -20,6 +21,7 @@ describe('resetPasswordForEmail redirect target', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   it('prefers NEXT_PUBLIC_APP_URL when set', async () => {

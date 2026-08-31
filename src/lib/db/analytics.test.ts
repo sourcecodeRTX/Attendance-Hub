@@ -6,10 +6,8 @@ import { invalidateAnalyticsCache } from './attendance';
 
 describe('analytics cache invalidation (F-014)', () => {
   beforeEach(async () => {
-    await db.cachedAnalytics.clear();
-    await db.subjects.clear();
-    await db.subjectSections.clear();
-    await db.attendanceSessions.clear();
+    await db.open();
+    await Promise.all(db.tables.map((t) => t.clear()));
   });
 
   it('getSectionAnalytics stores sectionId and caches computed summaries', async () => {

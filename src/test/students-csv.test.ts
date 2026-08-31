@@ -1,66 +1,82 @@
-import Papa from 'papaparse';
 import { describe, expect, it } from 'vitest';
+import { parseStudentsCsv } from '@/lib/utils/csv-import';
 
-/**
- * Mirrors the header-mapping logic currently inlined in
- * src/app/(dashboard)/students/page.tsx handleFileParse, so the harness has a
- * real CSV-parsing behavior to pin before the Phase 8 import-robustness work.
- */
-function mapCsvRows(csvText: string): { rollNumber: string; fullName: string }[] {
-  const results = Papa.parse<Record<string, string>>(csvText, {
-    header: true,
-    skipEmptyLines: true,
-  });
-  const parsed: { rollNumber: string; fullName: string }[] = [];
-  for (const row of results.data) {
-    const rollNumber =
-      row['roll_number'] || row['Roll Number'] || row['rollNumber'] || '';
-    const fullName =
-      row['full_name'] || row['Full Name'] || row['fullName'] || row['name'] || row['Name'] || '';
-    if (rollNumber.trim() && fullName.trim()) {
-      parsed.push({ rollNumber: rollNumber.trim(), fullName: fullName.trim() });
-    }
-  }
-  return parsed;
-}
-
-describe('students CSV import mapping', () => {
+describe('students CSV import mapping (production parseStudentsCsv)', () => {
   it('maps snake_case headers', () => {
-    const rows = mapCsvRows('roll_number,full_name\n001,Ada Lovelace\n');
-    expect(rows).toEqual([{ rollNumber: '001', fullName: 'Ada Lovelace' }]);
+    const result = parseStudentsCsv('roll_number,full_name\n001,Ada Lovelace\n');
+    expect(result).toEqual({
+      ok: true,
+      students: [{ rollNumber: '001', fullName: 'Ada Lovelace' }],
+      skippedCount: 0,
+    });
   });
 
   it('maps Title Case headers', () => {
-    const rows = mapCsvRows('Roll Number,Full Name\n002,Grace Hopper\n');
-    expect(rows).toEqual([{ rollNumber: '002', fullName: 'Grace Hopper' }]);
+    const result = parseStudentsCsv('Roll Number,Full Name\n002,Grace Hopper\n');
+    expect(result).toEqual({
+      ok: true,
+      students: [{ rollNumber: '002', fullName: 'Grace Hopper' }],
+      skippedCount: 0,
+    });
   });
 
   it('maps camelCase headers', () => {
-    const rows = mapCsvRows('rollNumber,fullName\n003,Alan Turing\n');
-    expect(rows).toEqual([{ rollNumber: '003', fullName: 'Alan Turing' }]);
+    const result = parseStudentsCsv('rollNumber,fullName\n003,Alan Turing\n');
+    expect(result).toEqual({
+      ok: true,
+      students: [{ rollNumber: '003', fullName: 'Alan Turing' }],
+      skippedCount: 0,
+    });
   });
 
-  it('skips rows missing either required field', () => {
+  it('skips rows missing either required field and reports skipped count', () => {
     const csv = [
       'roll_number,full_name',
       ',No Roll Here',
       '004,Complete Row',
       '005,',
     ].join('\n');
-    expect(mapCsvRows(csv)).toEqual([{ rollNumber: '004', fullName: 'Complete Row' }]);
+    const result = parseStudentsCsv(csv);
+    expect(result).toEqual({
+      ok: true,
+      students: [{ rollNumber: '004', fullName: 'Complete Row' }],
+      skippedCount: 2,
+    });
   });
 
-  it('skips blank lines via skipEmptyLines', () => {
-    const rows = mapCsvRows('roll_number,full_name\n\n006,Katherine Johnson\n\n');
-    expect(rows).toEqual([{ rollNumber: '006', fullName: 'Katherine Johnson' }]);
+  it('skips blank lines via skipEmptyLines without counting them as skipped rows', () => {
+    const result = parseStudentsCsv('roll_number,full_name\n\n006,Katherine Johnson\n\n');
+    expect(result).toEqual({
+      ok: true,
+      students: [{ rollNumber: '006', fullName: 'Katherine Johnson' }],
+      skippedCount: 0,
+    });
   });
 
   it('trims surrounding whitespace from values', () => {
-    const rows = mapCsvRows('roll_number,full_name\n" 007 ","  Mary Jackson  "\n');
-    expect(rows).toEqual([{ rollNumber: '007', fullName: 'Mary Jackson' }]);
+    const result = parseStudentsCsv('roll_number,full_name\n" 007 ","  Mary Jackson  "\n');
+    expect(result).toEqual({
+      ok: true,
+      students: [{ rollNumber: '007', fullName: 'Mary Jackson' }],
+      skippedCount: 0,
+    });
   });
 
-  it('returns nothing for a file with unrecognized headers only', () => {
-    expect(mapCsvRows('foo,bar\nbaz,qux\n')).toEqual([]);
+  it('rejects files with unrecognized headers and returns actionable error message', () => {
+    const result = parseStudentsCsv('foo,bar\nbaz,qux\n');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toMatch(/Missing required column/i);
+      expect(result.error).toMatch(/foo, ?bar/i);
+    }
+  });
+
+  it('rejects files with duplicate roll numbers', () => {
+    const result = parseStudentsCsv('roll_number,full_name\n008,Student A\n008,Student B\n');
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain('Duplicate roll numbers');
+      expect(result.error).toContain('008');
+    }
   });
 });

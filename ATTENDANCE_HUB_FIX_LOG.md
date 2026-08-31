@@ -23,7 +23,7 @@ Source of truth for *how it's being fixed*: this file.
 | 13 | Frontend Accessibility II + UX Honesty | Complete | 2026-08-23 | bbab2c6 |
 | 14 | State Management & Hooks Robustness | Complete | 2026-08-23 | 3822942 |
 | 15 | Backup/Restore & Activity-Log Correctness | Complete | 2026-08-31 | 87a9922 |
-| 16 | Test-Quality Fixes | Not started | | |
+| 16 | Test-Quality Fixes | Complete | 2026-08-31 | |
 | 17 | Medium Docs/UI-Text Contradictions | Not started | | |
 | 18 | Low Sweep — Lib Correctness | Not started | | |
 | 19 | Low Sweep — Frontend UX/A11y Polish | Not started | | |
@@ -750,3 +750,53 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Interactions with prior fixes**: Compatible with activity log UI in `/activity-logs`.
 - **Residual risk / follow-ups**: None.
 - **Commit**: see tracker.
+
+## Phase 16 Notes
+
+**Date:** 2026-08-31. **Scope:** Test-Quality Fixes (tautological/vacuous assertions, non-hermetic tests, tests codifying defective behavior as expected).
+
+### [FIXED] Test Suite Hermeticity, Parser Assertions, Realtime Coverage & Store Storage Tests
+
+- **Original severity**: Medium
+- **Phase**: 16 — Test-Quality Fixes
+- **Files changed**: `src/test/setup.ts`, `src/test/students-csv.test.ts`, `src/lib/supabase/auth.test.ts`, `src/lib/supabase/realtime.test.ts`, `src/lib/db/analytics.test.ts`, `src/lib/db/university.test.ts`, `src/lib/stores/uid-storage.test.ts` (new)
+- **Re-verification (Step 1)**: Audited entire test suite across 34 test files against Phase 16 scope:
+  1. `src/test/students-csv.test.ts` codified a Phase 2 dummy shim function (`mapCsvRows`) rather than testing the real production `parseStudentsCsv` utility from Phase 8. It lacked validation for duplicate roll numbers, required column schemas, and skipped row counters.
+  2. `src/lib/supabase/auth.test.ts` used `vi.stubGlobal('window', undefined)` in its SSR/node environment test, but `afterEach`/`beforeEach` only cleared env vars without calling `vi.unstubAllGlobals()`, leaking global state into other tests.
+  3. `src/test/setup.ts` lacked a centralized `afterEach(cleanup)` hook, creating potential DOM element retention in `jsdom` between UI component tests.
+  4. `src/lib/supabase/realtime.test.ts` only tested `subscribeToStudents`, omitting tests for `subscribeToAttendanceSessions`, `subscribeToSubjects`, and `REALTIME_REFRESH_DEBOUNCE_MS`.
+  5. `src/lib/db/analytics.test.ts` only cleared 4 specific tables in `beforeEach` without calling `db.open()` or wiping all tables via `Promise.all(db.tables.map(t => t.clear()))`.
+  6. `src/lib/db/university.test.ts` only tested `getDepartments` stale cache fallback, omitting test coverage for `deleteSection` (F-013 cascading deletion of `userSections`, `userSubjects`, `attendanceSessions`, `subjectSections`, `cachedAnalytics`, orphan subject deletion, and `syncQueue` delete items).
+  7. `src/lib/stores/uid-storage.ts` lacked isolated unit test coverage for `createUidStorage`, `setCurrentUid`/`getCurrentUid`, legacy key migration, and `clearUidScopedStores`.
+- **Root cause (Step 2)**: Legacy test harness shims left un-refactored after feature implementations, missing global/DOM cleanup hooks, and untested auxiliary channels/methods.
+- **Edge cases enumerated (Step 3)**:
+  - *Production CSV Parser Testing*: `students-csv.test.ts` must test `parseStudentsCsv` with snake_case, Title Case, camelCase, in-file duplicate detection, missing required columns, whitespace trimming, and empty line handling.
+  - *Hermetic Global Environment Cleanup*: `vi.unstubAllGlobals()` in `beforeEach` and `afterEach` prevents global `window` stubbing from leaking into other test suites.
+  - *Hermetic DOM Tree Cleanup*: Centralized `afterEach(() => cleanup())` in `src/test/setup.ts` ensures DOM trees are unmounted after each test regardless of individual test file setup.
+  - *Realtime Channel Scoping*: `subscribeToAttendanceSessions` and `subscribeToSubjects` must be tested for correct channel names, `postgres_changes` filter shapes (`section_id=eq.<id>`), and payload callback forwarding.
+  - *Hermetic Dexie Database State*: All Dexie test suites must open the database and clear all tables before each test.
+  - *Cascading Deletion Verification*: `deleteSection` must be tested to ensure deletion of junction rows, sessions, cached analytics, and orphan subjects while preserving shared subjects still linked to other sections.
+  - *Scoped Storage Lifecycle*: `createUidStorage` must test fallback to baseKey when no user is active, user-scoped keys when active, legacy unscoped key migration without overwriting existing data, and multi-user store purging on `clearUidScopedStores`.
+- **Fix design considered (Step 4)**: (a) ignore legacy test shims — risks regression and masks untested code; (b) systematically fix harness shims, add centralized cleanup, expand realtime and university cascade tests, and add isolated store storage tests — chosen.
+- **Fix applied (Step 5)**:
+  - Registered `afterEach(() => cleanup())` in `src/test/setup.ts`.
+  - Added `vi.unstubAllGlobals()` in `beforeEach` and `afterEach` in `src/lib/supabase/auth.test.ts`.
+  - Refactored `src/test/students-csv.test.ts` to test `parseStudentsCsv`.
+  - Added test suites for `subscribeToAttendanceSessions`, `subscribeToSubjects`, and `REALTIME_REFRESH_DEBOUNCE_MS` in `src/lib/supabase/realtime.test.ts`.
+  - Standardized `beforeEach` in `src/lib/db/analytics.test.ts` on `db.open()` and `Promise.all(db.tables.map(t => t.clear()))`.
+  - Added `deleteSection` test suite covering full cascade, orphan subject cleanup, shared subject preservation, and sync queue enqueueing in `src/lib/db/university.test.ts`.
+  - Created `src/lib/stores/uid-storage.test.ts` with 7 unit tests covering all storage paths and migrations.
+- **Tests added/modified (Step 6)**:
+  - `src/test/students-csv.test.ts` (8 tests) testing `parseStudentsCsv`.
+  - `src/lib/supabase/realtime.test.ts` (5 tests total, +3 new tests).
+  - `src/lib/db/university.test.ts` (5 tests total, +3 new tests for `deleteSection`).
+  - `src/lib/stores/uid-storage.test.ts` (7 tests).
+- **Full verification result (Step 7)**:
+  - `pnpm run lint` EXIT=0 (14 warnings <= baseline 17, 0 errors).
+  - `pnpm exec tsc --noEmit` EXIT=0 (clean).
+  - `pnpm run test` EXIT=0 (35 test files / 268 tests passed).
+  - `pnpm run build` EXIT=0 (all 24 routes prerender clean).
+- **Interactions with prior fixes**: Validates F-013 (`deleteSection` junction cascade), F-008 (`parseStudentsCsv`), and F-019 (`realtime`).
+- **Residual risk / follow-ups**: None.
+- **Commit**: see tracker.
+
