@@ -40,6 +40,8 @@ import {
   CheckCircle2,
   Clock,
   AlertTriangle,
+  Eye,
+  RotateCw,
 } from 'lucide-react';
 
 export default function SyncPage() {
@@ -51,6 +53,8 @@ export default function SyncPage() {
   const [pulling, setPulling] = useState(false);
   const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [inspectItem, setInspectItem] = useState<SyncQueueItem | null>(null);
+  const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -118,6 +122,39 @@ export default function SyncPage() {
     }
   }
 
+  async function handleRetryItem(item: SyncQueueItem) {
+    if (item.id === undefined) return;
+    setActionLoadingId(item.id);
+    try {
+      await db.syncQueue.update(item.id, {
+        retryCount: 0,
+        claimedAt: undefined,
+        nextAttemptAt: undefined,
+      });
+      toast.success('Reset retry count for item. Syncing now...');
+      await processSyncQueue();
+      loadData();
+    } catch (_err) {
+      toast.error('Failed to retry item');
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleDeleteItem(item: SyncQueueItem) {
+    if (item.id === undefined) return;
+    setActionLoadingId(item.id);
+    try {
+      await db.syncQueue.delete(item.id);
+      toast.success('Removed item from queue');
+      loadData();
+    } catch (_err) {
+      toast.error('Failed to delete item');
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
   if (!user) return null;
 
   return (
@@ -151,8 +188,8 @@ export default function SyncPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card size="sm">
           <CardContent className="flex items-center gap-3 pt-4">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-green-100">
-              <CheckCircle2 className="size-5 text-green-600" />
+            <div className="flex size-9 items-center justify-center rounded-lg bg-green-100 dark:bg-green-950/40">
+              <CheckCircle2 className="size-5 text-green-600 dark:text-green-400" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Status</p>
@@ -162,8 +199,8 @@ export default function SyncPage() {
         </Card>
         <Card size="sm">
           <CardContent className="flex items-center gap-3 pt-4">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-amber-100">
-              <Clock className="size-5 text-amber-600" />
+            <div className="flex size-9 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/40">
+              <Clock className="size-5 text-amber-600 dark:text-amber-400" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Pending</p>
@@ -173,8 +210,8 @@ export default function SyncPage() {
         </Card>
         <Card size="sm">
           <CardContent className="flex items-center gap-3 pt-4">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-red-100">
-              <AlertTriangle className="size-5 text-red-600" />
+            <div className="flex size-9 items-center justify-center rounded-lg bg-red-100 dark:bg-red-950/40">
+              <AlertTriangle className="size-5 text-red-600 dark:text-red-400" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Failed</p>
@@ -209,58 +246,177 @@ export default function SyncPage() {
             <p>Sync queue is empty. Everything is up to date.</p>
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Collection</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Doc ID</TableHead>
-                <TableHead>Retry Count</TableHead>
-                <TableHead>Created At</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {queueItems.map((item) => (
-                <TableRow key={item.id ?? item.docId}>
-                  <TableCell className="font-mono text-xs">
-                    {item.collection}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        item.type === 'create'
-                          ? 'default'
-                          : item.type === 'bulk_create'
-                          ? 'secondary'
-                          : item.type === 'update'
-                          ? 'secondary'
-                          : 'destructive'
-                      }
-                    >
-                      {item.type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="max-w-[120px] truncate font-mono text-xs">
-                    {item.docId}
-                  </TableCell>
-                  <TableCell>{item.retryCount}</TableCell>
-                  <TableCell className="text-xs">
-                    {new Date(item.createdAt).toLocaleString()}
-                  </TableCell>
-                  <TableCell>
-                    {item.retryCount >= 5 ? (
-                      <Badge variant="destructive">Failed</Badge>
-                    ) : (
-                      <Badge variant="secondary">Pending</Badge>
-                    )}
-                  </TableCell>
+          <div className="overflow-x-auto rounded-lg border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Collection</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Doc ID</TableHead>
+                  <TableHead>Retry Count</TableHead>
+                  <TableHead>Created At</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {queueItems.map((item) => {
+                  const isBusy = actionLoadingId === item.id;
+                  return (
+                    <TableRow key={item.id ?? item.docId}>
+                      <TableCell className="font-mono text-xs">
+                        {item.collection}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            item.type === 'create'
+                              ? 'default'
+                              : item.type === 'bulk_create'
+                              ? 'secondary'
+                              : item.type === 'update'
+                              ? 'secondary'
+                              : 'destructive'
+                          }
+                        >
+                          {item.type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-[120px] truncate font-mono text-xs">
+                        {item.docId}
+                      </TableCell>
+                      <TableCell>{item.retryCount}</TableCell>
+                      <TableCell className="text-xs">
+                        {new Date(item.createdAt).toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        {item.retryCount >= 5 ? (
+                          <Badge variant="destructive">Failed</Badge>
+                        ) : (
+                          <Badge variant="secondary">Pending</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={`Inspect item ${item.docId}`}
+                            onClick={() => setInspectItem(item)}
+                          >
+                            <Eye className="size-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={`Retry item ${item.docId}`}
+                            disabled={isBusy}
+                            onClick={() => handleRetryItem(item)}
+                          >
+                            {isBusy ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <RotateCw className="size-3.5" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={`Delete item ${item.docId}`}
+                            disabled={isBusy}
+                            className="text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteItem(item)}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </div>
+
+      {/* Item Inspection Dialog */}
+      <Dialog
+        open={inspectItem !== null}
+        onOpenChange={(open) => {
+          if (!open) setInspectItem(null);
+        }}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Queue Item Details</DialogTitle>
+            <DialogDescription>
+              {inspectItem?.collection} &middot; {inspectItem?.type} &middot; ID: {inspectItem?.docId}
+            </DialogDescription>
+          </DialogHeader>
+
+          {inspectItem && (
+            <div className="space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2 rounded-lg bg-muted/50 p-3 font-mono">
+                <div>
+                  <span className="text-muted-foreground">Queue ID:</span> {inspectItem.id ?? 'N/A'}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Retries:</span> {inspectItem.retryCount}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Created:</span> {new Date(inspectItem.createdAt).toLocaleString()}
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Next Attempt:</span>{' '}
+                  {inspectItem.nextAttemptAt ? new Date(inspectItem.nextAttemptAt).toLocaleString() : 'Immediate'}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1.5 font-medium text-muted-foreground">Payload Data</p>
+                <pre className="max-h-60 overflow-auto rounded-lg bg-muted p-3 font-mono text-[11px] leading-relaxed select-all">
+                  {JSON.stringify(inspectItem.data, null, 2)}
+                </pre>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            {inspectItem && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const itm = inspectItem;
+                    setInspectItem(null);
+                    handleRetryItem(itm);
+                  }}
+                >
+                  <RotateCw className="mr-1.5 size-3.5" />
+                  Retry Item
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    const itm = inspectItem;
+                    setInspectItem(null);
+                    handleDeleteItem(itm);
+                  }}
+                >
+                  <Trash2 className="mr-1.5 size-3.5" />
+                  Delete Item
+                </Button>
+              </>
+            )}
+            <DialogClose render={<Button variant="outline" size="sm" />}>
+              Close
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Clear Failed Confirmation Dialog */}
       <Dialog open={clearConfirmOpen} onOpenChange={setClearConfirmOpen}>

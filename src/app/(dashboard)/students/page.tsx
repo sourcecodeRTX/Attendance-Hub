@@ -124,7 +124,9 @@ export default function StudentsPage() {
 
       let sectionIds: string[] = [];
 
-      if (user.role === 'admin' || user.role === 'super_admin') {
+      if (user.role === 'super_admin') {
+        sectionIds = allSections.map((s) => s.id);
+      } else if (user.role === 'admin') {
         const deptSections = allSections.filter((s) => s.departmentId === user.departmentId);
         sectionIds = deptSections.map((s) => s.id);
       } else if (user.role === 'cr') {
@@ -286,6 +288,22 @@ export default function StudentsPage() {
 
   const showMobileActions = isPrimaryTeacher && teacherDetailView === 'actions';
   const mobileTemplateColumns = `${showMobileActions ? '5.25rem' : '6rem'} minmax(9.5rem, 1fr) 6.5rem${showMobileActions ? ' 2.5rem' : ''}`;
+
+  const targetUploadSectionId = actionSectionId || (teacherSectionIds.length > 0 ? teacherSectionIds[0] : '');
+
+  const existingSectionRolls = useMemo(() => {
+    if (!targetUploadSectionId) return new Set<string>();
+    return new Set(
+      students
+        .filter((s) => s.sectionId === targetUploadSectionId && s.isActive)
+        .map((s) => s.rollNumber.trim().toUpperCase())
+    );
+  }, [students, targetUploadSectionId]);
+
+  const duplicateSectionCount = useMemo(() => {
+    if (csvData.length === 0 || existingSectionRolls.size === 0) return 0;
+    return csvData.filter((row) => existingSectionRolls.has(row.rollNumber.trim().toUpperCase())).length;
+  }, [csvData, existingSectionRolls]);
 
   async function handleAddStudent() {
     if (!user || !university) {
@@ -654,17 +672,24 @@ export default function StudentsPage() {
           {searchQuery ? 'No students match your search.' : 'No students found.'}
         </div>
       ) : (
-        <div ref={tableContainerRef} className="max-h-[65vh] overflow-auto rounded-md border">
+        <div
+          ref={tableContainerRef}
+          role="table"
+          aria-label="Students list"
+          className="max-h-[65vh] overflow-auto rounded-md border"
+        >
           <div
+            role="row"
             className="sticky top-0 z-10 grid border-b bg-background text-xs font-medium text-muted-foreground sm:hidden"
             style={{ gridTemplateColumns: mobileTemplateColumns }}
           >
-            <div className="px-2 py-2">Roll No.</div>
-            <div className="px-2 py-2">Full Name</div>
-            <div className="px-2 py-2">Section</div>
-            {showMobileActions && <div className="px-2 py-2 text-center">Action</div>}
+            <div role="columnheader" className="px-2 py-2">Roll No.</div>
+            <div role="columnheader" className="px-2 py-2">Full Name</div>
+            <div role="columnheader" className="px-2 py-2">Section</div>
+            {showMobileActions && <div role="columnheader" className="px-2 py-2 text-center">Action</div>}
           </div>
           <div
+            role="row"
             className="sticky top-0 z-10 hidden border-b bg-background text-sm font-medium text-muted-foreground sm:grid"
             style={{
               gridTemplateColumns: isPrimaryTeacher
@@ -672,12 +697,13 @@ export default function StudentsPage() {
                 : '8.5rem minmax(12rem, 1.5fr) 8rem',
             }}
           >
-            <div className="px-2 py-2">Roll Number</div>
-            <div className="px-2 py-2">Full Name</div>
-            <div className="px-2 py-2">Section</div>
-            {isPrimaryTeacher && <div className="px-2 py-2 text-right">Actions</div>}
+            <div role="columnheader" className="px-2 py-2">Roll Number</div>
+            <div role="columnheader" className="px-2 py-2">Full Name</div>
+            <div role="columnheader" className="px-2 py-2">Section</div>
+            {isPrimaryTeacher && <div role="columnheader" className="px-2 py-2 text-right">Actions</div>}
           </div>
           <div
+            role="rowgroup"
             style={{
               display: 'grid',
               height: `${studentRowVirtualizer.getTotalSize()}px`,
@@ -691,6 +717,7 @@ export default function StudentsPage() {
               return (
                 <Fragment key={student.id}>
                   <div
+                    role="row"
                     className="grid items-center border-b px-0 transition-colors hover:bg-muted/50 sm:hidden"
                     style={{
                       gridTemplateColumns: mobileTemplateColumns,
@@ -701,11 +728,11 @@ export default function StudentsPage() {
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
                   >
-                    <div className="truncate px-2 py-2 font-mono text-xs">{student.rollNumber}</div>
-                    <div className="truncate px-2 py-2 text-xs">{student.fullName}</div>
-                    <div className="truncate px-2 py-2 text-xs">{getSectionName(student.sectionId)}</div>
+                    <div role="cell" className="truncate px-2 py-2 font-mono text-xs">{student.rollNumber}</div>
+                    <div role="cell" className="truncate px-2 py-2 text-xs">{student.fullName}</div>
+                    <div role="cell" className="truncate px-2 py-2 text-xs">{getSectionName(student.sectionId)}</div>
                     {showMobileActions && (
-                      <div className="px-1 py-2 text-center">
+                      <div role="cell" className="px-1 py-2 text-center">
                         <DropdownMenu>
                           <DropdownMenuTrigger
                             aria-label={`More actions for ${student.fullName}`}
@@ -738,6 +765,7 @@ export default function StudentsPage() {
                   </div>
 
                   <div
+                    role="row"
                     className="hidden items-center border-b px-0 transition-colors hover:bg-muted/50 sm:grid"
                     style={{
                       gridTemplateColumns: isPrimaryTeacher
@@ -750,11 +778,11 @@ export default function StudentsPage() {
                       transform: `translateY(${virtualRow.start}px)`,
                     }}
                   >
-                    <div className="px-2 py-2 font-mono whitespace-nowrap">{student.rollNumber}</div>
-                    <div className="truncate px-2 py-2">{student.fullName}</div>
-                    <div className="truncate px-2 py-2">{getSectionName(student.sectionId)}</div>
+                    <div role="cell" className="px-2 py-2 font-mono whitespace-nowrap">{student.rollNumber}</div>
+                    <div role="cell" className="truncate px-2 py-2">{student.fullName}</div>
+                    <div role="cell" className="truncate px-2 py-2">{getSectionName(student.sectionId)}</div>
                     {isPrimaryTeacher && (
-                      <div className="px-2 py-2 text-right">
+                      <div role="cell" className="px-2 py-2 text-right">
                         <div className="flex justify-end gap-1">
                           <Button
                             variant="ghost"
@@ -976,6 +1004,11 @@ export default function StudentsPage() {
                   Clear
                 </Button>
               </div>
+              {duplicateSectionCount > 0 && (
+                <div role="status" className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-700 dark:text-amber-300">
+                  <strong>Notice:</strong> {duplicateSectionCount} student{duplicateSectionCount !== 1 ? 's' : ''} in this file match roll numbers already assigned to this section.
+                </div>
+              )}
               <div className="max-h-[240px] overflow-y-auto rounded-lg border">
                 <Table>
                   <TableHeader>

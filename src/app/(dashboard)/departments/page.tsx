@@ -629,7 +629,7 @@ export default function DepartmentsPage() {
             <Separator />
 
             <div className="space-y-3">
-              <h4 className="text-sm font-medium">Admin Account</h4>
+              <h3 className="text-sm font-medium">Admin Account</h3>
               <div className="space-y-1.5">
                 <Label htmlFor="admin-name">Full Name</Label>
                 <Input
@@ -752,7 +752,7 @@ export default function DepartmentsPage() {
 
           <form onSubmit={handleAssignAndDeactivate} className="space-y-4">
             <div className="space-y-3">
-              <h4 className="text-sm font-medium">New Department Admin</h4>
+              <h3 className="text-sm font-medium">New Department Admin</h3>
 
               <div className="space-y-1.5">
                 <Label htmlFor="handover-name">Full Name</Label>

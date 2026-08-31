@@ -50,6 +50,7 @@ import { ActivityLog, ActivityActionType, Department, LogSettings } from '@/lib/
 import { ScrollText, Filter, Loader2, FileSpreadsheet, FileJson, Trash2, Settings, AlertTriangle } from 'lucide-react';
 import Papa from 'papaparse';
 import { sanitizeCsvRows } from '@/lib/utils/csv-export';
+import { LogRetentionWarning, isSaturday } from '@/components/shared/LogRetentionWarning';
 
 const PAGE_SIZE = 50;
 
@@ -476,6 +477,15 @@ export default function ActivityLogsPage() {
           )}
         </div>
       </div>
+
+      {/* Retention Warning for Super Admin on scheduled cleanup day */}
+      {isSuperAdmin && autoDeleteEnabled && isSaturday() && (
+        <LogRetentionWarning
+          onDownloadCSV={handleDownloadCSV}
+          onDownloadJSON={handleDownloadJSON}
+          isDownloading={isDownloading}
+        />
+      )}
 
       {/* Super Admin Log Settings Panel */}
       {isSuperAdmin && showSettingsPanel && (

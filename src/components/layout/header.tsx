@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { LogOut } from 'lucide-react';
@@ -7,7 +8,7 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { useUIStore } from '@/lib/stores/ui-store';
 import { signOut } from '@/lib/supabase/auth';
-import { buttonVariants } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -19,6 +20,14 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
@@ -49,6 +58,8 @@ export function Header() {
   const router = useRouter();
   const { user, university, clearAuth } = useAuthStore();
   const { syncStatus } = useUIStore();
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   if (!user) return null;
 
@@ -62,62 +73,99 @@ export function Header() {
     .slice(0, 2);
 
   async function handleSignOut() {
-    await signOut();
-    clearAuth();
-    router.push('/login');
+    setIsSigningOut(true);
+    try {
+      await signOut();
+      clearAuth();
+      setShowSignOutConfirm(false);
+      router.push('/login');
+    } finally {
+      setIsSigningOut(false);
+    }
   }
 
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-card px-4">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-base font-semibold">{pageTitle}</p>
-        {university && (
-          <p className="truncate text-xs text-muted-foreground lg:hidden">
-            {university.name}
-          </p>
-        )}
-      </div>
-
-      <Link
-        href="/sync"
-        aria-label={`Sync status: ${sync.label}`}
-        className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
-      >
-        <span className={cn('inline-block size-2 rounded-full', sync.color)} />
-        <span role="status" className="sr-only sm:inline">
-          {sync.label}
-        </span>
-      </Link>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label="Open account menu"
-          className={cn(
-            buttonVariants({ variant: 'ghost', size: 'icon' }),
-            'rounded-full'
+    <>
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-card px-4">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base font-semibold">{pageTitle}</p>
+          {university && (
+            <p className="truncate text-xs text-muted-foreground lg:hidden">
+              {university.name}
+            </p>
           )}
+        </div>
+
+        <Link
+          href="/sync"
+          aria-label={`Sync status: ${sync.label}`}
+          className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
         >
-          <Avatar size="sm">
-            <AvatarFallback>{initials}</AvatarFallback>
-          </Avatar>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" sideOffset={8}>
-          <DropdownMenuGroup>
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col gap-1">
-                <p className="text-sm font-medium">{user.fullName}</p>
-                <Badge variant="secondary">{ROLE_LABELS[user.role]}</Badge>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
-              </div>
-            </DropdownMenuLabel>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={handleSignOut}>
-            <LogOut className="size-4" />
-            Sign out
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </header>
+          <span className={cn('inline-block size-2 rounded-full', sync.color)} />
+          <span role="status" className="sr-only sm:inline">
+            {sync.label}
+          </span>
+        </Link>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label="Open account menu"
+            className={cn(
+              buttonVariants({ variant: 'ghost', size: 'icon' }),
+              'rounded-full'
+            )}
+          >
+            <Avatar size="sm">
+              <AvatarFallback>{initials}</AvatarFallback>
+            </Avatar>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" sideOffset={8}>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-medium">{user.fullName}</p>
+                  <Badge variant="secondary">{ROLE_LABELS[user.role]}</Badge>
+                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                </div>
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setShowSignOutConfirm(true)}>
+              <LogOut className="size-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </header>
+
+      <Dialog open={showSignOutConfirm} onOpenChange={setShowSignOutConfirm}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Are you sure you want to sign out?</DialogTitle>
+            <DialogDescription>
+              You will be signed out of your session and redirected to the login page.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowSignOutConfirm(false)}
+              disabled={isSigningOut}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleSignOut}
+              disabled={isSigningOut}
+            >
+              Confirm Sign out
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

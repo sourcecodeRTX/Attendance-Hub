@@ -1,13 +1,15 @@
 import { render, screen, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Sidebar } from '@/components/layout/sidebar';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import type { User } from '@/lib/types/user';
 
+const mockPush = vi.fn();
 vi.mock('@/lib/supabase/auth', () => ({ signOut: vi.fn() }));
 vi.mock('next/navigation', () => ({
   usePathname: () => '/dashboard',
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 const mockUser: User = {
@@ -21,6 +23,7 @@ const mockUser: User = {
 afterEach(() => {
   cleanup();
   useAuthStore.setState({ user: null });
+  vi.clearAllMocks();
 });
 
 describe('Sidebar navigation semantics (a11y)', () => {
@@ -47,5 +50,40 @@ describe('Sidebar navigation semantics (a11y)', () => {
     expect(
       screen.getByRole('complementary', { name: 'Primary' })
     ).toBeInTheDocument();
+  });
+
+  it('opens confirmation dialog on clicking sign out and completes sign out on confirm', async () => {
+    const user = userEvent.setup();
+    const auth = await import('@/lib/supabase/auth');
+    useAuthStore.setState({ user: mockUser });
+    render(<Sidebar />);
+
+    const signOutBtn = screen.getByRole('button', { name: 'Sign out' });
+    await user.click(signOutBtn);
+
+    expect(screen.getByText(/Are you sure you want to sign out\?/i)).toBeInTheDocument();
+    expect(auth.signOut).not.toHaveBeenCalled();
+
+    const confirmBtn = screen.getByRole('button', { name: 'Confirm Sign out' });
+    await user.click(confirmBtn);
+
+    expect(auth.signOut).toHaveBeenCalledTimes(1);
+    expect(mockPush).toHaveBeenCalledWith('/login');
+  });
+
+  it('cancels sign out when clicking cancel in confirmation dialog', async () => {
+    const user = userEvent.setup();
+    const auth = await import('@/lib/supabase/auth');
+    useAuthStore.setState({ user: mockUser });
+    render(<Sidebar />);
+
+    const signOutBtn = screen.getByRole('button', { name: 'Sign out' });
+    await user.click(signOutBtn);
+
+    const cancelBtn = screen.getByRole('button', { name: 'Cancel' });
+    await user.click(cancelBtn);
+
+    expect(auth.signOut).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Are you sure you want to sign out\?/i)).not.toBeInTheDocument();
   });
 });

@@ -26,7 +26,7 @@ Source of truth for *how it's being fixed*: this file.
 | 16 | Test-Quality Fixes | Complete | 2026-08-31 | c1142ca |
 | 17 | Medium Docs/UI-Text Contradictions | Complete | 2026-08-31 | e132374 |
 | 18 | Low Sweep — Lib Correctness | Complete | 2026-08-31 | 4865476 |
-| 19 | Low Sweep — Frontend UX/A11y Polish | Not started | | |
+| 19 | Low Sweep — Frontend UX/A11y Polish | Complete | 2026-08-31 | b797a3f |
 | 20 | Low Sweep — Ops/Tooling | Not started | | |
 | 21 | CI Foundation | Not started | | |
 | 22 | Low Sweep — Final Docs/Text | Not started | | |
@@ -900,6 +900,59 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
   - `pnpm run test` EXIT=0 (37 test files / 298 tests passed).
   - `pnpm run build` EXIT=0 (all 24 routes prerender clean).
 - **Interactions with prior fixes**: Reconciles F-031; fixes Phase 13 CR management runtime failure and realtime subject subscription lead; preserves Phase 3/9 server-side action validation and Phase 8 CSV parser contract.
+- **Residual risk / follow-ups**: None.
+- **Commit**: see tracker.
+
+## Phase 19 Notes
+
+**Date:** 2026-08-31. **Scope:** Frontend UX & Accessibility Polish (LogRetentionWarning component integration, unsaved attendance navigation guard, sign-out confirmation dialogs, Super Admin student section visibility scoping, modal heading hierarchy, per-item sync queue inspection/retry/deletion, CSV duplicate roll number notice, table accessibility semantics, and Emil Kowalski design engineering transitions).
+
+### [FIXED] Frontend UX, Accessibility & Interaction Polish Sweep
+
+- **Original severity**: Low
+- **Phase**: 19 — Low Sweep — Frontend UX/A11y Polish
+- **Files changed**: `src/components/shared/LogRetentionWarning.tsx`, `src/components/shared/log-retention-warning.test.tsx`, `src/app/(dashboard)/activity-logs/page.tsx`, `src/app/(dashboard)/attendance/page.tsx`, `src/components/layout/sidebar.tsx`, `src/components/layout/sidebar.test.tsx`, `src/components/layout/header.tsx`, `src/components/layout/header.test.tsx`, `src/app/(dashboard)/students/page.tsx`, `src/app/(dashboard)/departments/page.tsx`, `src/app/(dashboard)/sync/page.tsx`, `src/components/ui/button.tsx`, `src/app/globals.css`, `src/test/phase19-frontend-ux.test.ts`
+- **Re-verification (Step 1)**: Audited all remaining low-severity UX/a11y leads across frontend pages and layout components:
+  1. `src/components/shared/LogRetentionWarning.tsx`: The retention warning banner component existed but was never mounted in `src/app/(dashboard)/activity-logs/page.tsx`, so Super Admins received no heads-up on Saturday before Sunday evening auto-deletion.
+  2. `src/app/(dashboard)/attendance/page.tsx`: While `hasUnsavedChanges` state was tracked, no `beforeunload` listener was registered, allowing browser tab closures / reloads to discard unsaved marks without warning.
+  3. `src/components/layout/sidebar.tsx` and `src/components/layout/header.tsx`: Clicking "Sign out" immediately cleared session credentials and redirected without confirmation, risking accidental disruption of active user sessions.
+  4. `src/app/(dashboard)/students/page.tsx:127-130`: Grouped `admin` and `super_admin` together and filtered sections by `s.departmentId === user.departmentId`. If a super_admin profile had a department ID set, their student list was improperly scoped to only that department rather than the entire university.
+  5. `src/app/(dashboard)/departments/page.tsx:632, 755`: Section headings inside modal dialogs used `<h4>` under `<DialogTitle>` (which renders `<h2>`), skipping heading level 3 and violating WCAG 1.3.1 / 2.4.6 heading hierarchy.
+  6. `src/app/(dashboard)/sync/page.tsx`: Only bulk pull/sync and bulk clear were available. Users had no ability to inspect individual failed items' JSON payloads or selectively retry/delete individual queue entries.
+  7. `src/app/(dashboard)/students/page.tsx`: CSV import lacked pre-check feedback alerting users when incoming rows matched roll numbers already present in the target section.
+  8. `src/app/(dashboard)/students/page.tsx`: Virtualized list used generic `<div>` grids without table semantics.
+  9. `src/components/ui/button.tsx` and `src/app/globals.css`: Buttons lacked responsive tactile feedback (`active:scale-[0.98]`), and global stylesheet used blanket `transition: all 0.3s` which causes layout lag.
+- **Root cause (Step 2)**: Missing component integration; missing window unload event listeners; missing confirmation state dialogs; conflation of super_admin and admin section query paths; skipped heading level tags in dialog sub-sections; missing item-level queue mutation APIs in UI; missing section duplicate pre-check calculation; missing ARIA table roles on virtualized containers; non-optimized transition declarations.
+- **Edge cases enumerated (Step 3)**:
+  - *Retention Warning Conditions*: Banner mounts strictly when `isSuperAdmin && autoDeleteEnabled && isSaturday()`, enabling instant CSV/JSON backup download with busy states.
+  - *Unsaved Attendance Protection*: Guard activates if `hasUnsavedChanges === true` (toggled on attendance mark change, duty leave change, or mark-all-present), and cleanly deactivates upon save or subject switch.
+  - *Sign-out Flow*: Sign-out modal provides clear cancel and confirm actions with accessible names and loading prevention.
+  - *Super Admin Scoping*: Super admins receive all university sections regardless of profile metadata (`allSections.map(s => s.id)`), while department admins remain strictly scoped.
+  - *Duplicate CSV Pre-check*: Case-insensitive and trimmed comparison against active section students, surfacing a clear informational notice.
+  - *Sync Queue Item Management*: Retry resets `retryCount: 0`, `claimedAt: undefined`, `nextAttemptAt: undefined` in Dexie and executes a sync run; inspect modal renders structured, select-all JSON payload.
+  - *Interactive Transitions*: Snappy 150ms transitions on color/background/opacity/transform, with active scale feedback on buttons, respecting `prefers-reduced-motion`.
+- **Fix design considered (Step 4)**: (a) implement only 1-2 items — rejected: Phase 19 requires a full sweep of frontend UX/a11y items; (b) execute full Gauntlet loop across all 9 areas with dedicated tests, table semantics, and strict typecheck — chosen.
+- **Fix applied (Step 5)**:
+  - Mounted `<LogRetentionWarning />` in `src/app/(dashboard)/activity-logs/page.tsx`.
+  - Added `beforeunload` listener in `src/app/(dashboard)/attendance/page.tsx` when `hasUnsavedChanges` is true.
+  - Added sign-out confirmation `Dialog` modals to `src/components/layout/sidebar.tsx` and `src/components/layout/header.tsx`.
+  - Separated `super_admin` from `admin` in `src/app/(dashboard)/students/page.tsx` for whole-university section query.
+  - Replaced `<h4 className="text-sm font-medium">` with `<h3 className="text-sm font-medium">` in `src/app/(dashboard)/departments/page.tsx`.
+  - Added per-item inspect dialog, retry action, and delete action to `src/app/(dashboard)/sync/page.tsx`.
+  - Added section duplicate detection notice and virtual table ARIA semantics (`role="table"`, `role="rowgroup"`, `role="row"`, `role="columnheader"`, `role="cell"`) to `src/app/(dashboard)/students/page.tsx`.
+  - Added `active:scale-[0.98]` to `src/components/ui/button.tsx` and refined interactive element transitions in `src/app/globals.css`.
+- **Tests added/modified (Step 6)**:
+  - `src/components/shared/log-retention-warning.test.tsx` (3 new tests): Verifies Saturday calculation and component download callbacks/disabled states.
+  - `src/components/layout/sidebar.test.tsx` (+2 new tests): Verifies sign-out confirmation dialog opening, confirmation sign-out, and cancellation.
+  - `src/components/layout/header.test.tsx` (+1 new test): Verifies account dropdown sign-out confirmation flow.
+  - `src/test/phase19-frontend-ux.test.ts` (4 new tests): Verifies sync queue retry reset logic, single-item queue deletion, CSV duplicate detection, and Super Admin section scoping.
+  - Pre-fix proof: Tests failed against pre-fix code (sidebar/header lacked confirmation dialogs, fake-indexeddb operations failed before fix).
+- **Full verification result (Step 7)**:
+  - `pnpm run lint` EXIT=0 (14 warnings <= baseline 17, 0 errors).
+  - `pnpm exec tsc --noEmit` EXIT=0 (clean).
+  - `pnpm run test` EXIT=0 (39 test files / 308 tests passed).
+  - `pnpm run build` EXIT=0 (all 24 routes prerender clean).
+- **Interactions with prior fixes**: Fully preserves Phase 6 sync engine invariants, Phase 8 CSV contracts, Phase 12/13 accessibility semantics, and Phase 15 log retention rules.
 - **Residual risk / follow-ups**: None.
 - **Commit**: see tracker.
 

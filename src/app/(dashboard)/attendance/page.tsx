@@ -160,7 +160,21 @@ export default function AttendancePage() {
     setActiveSessionId(null);
     setIsNewSession(false);
     setViewingHistorySession(null);
+    setHasUnsavedChanges(false);
   }
+
+  // Guard against accidental tab closure/reload when unsaved attendance marks exist
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   // ---- history ----
   const [historySessions, setHistorySessions] = useState<AttendanceSession[]>(
