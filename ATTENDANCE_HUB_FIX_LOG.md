@@ -31,7 +31,7 @@ Source of truth for *how it's being fixed*: this file.
 | 21 | CI Foundation | Complete | 2026-08-31 | 6d76ee7 |
 | 22 | Low Sweep — Final Docs/Text | Complete | 2026-08-31 | da34078 |
 | 23 | Compressed Re-Audit | Complete | 2026-08-31 | df42f71 |
-| 24 | Final Docs/README Sync | Complete | 2026-08-31 | |
+| 24 | Final Docs/README Sync | Complete | 2026-08-31 | 3edfec6 |
 | 25 | Closing Report | Not started | | |
 
 Status values: `Not started` / `In progress (partial — see notes)` / `Complete`
@@ -1179,4 +1179,4 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
   - `pnpm run build` EXIT=0 (all 24 static routes prerender clean).
 - **Interactions with prior fixes**: Fully synchronizes and documents the achievements of all 23 prior phases.
 - **Residual risk / follow-ups**: None. Ready for Phase 25 (Closing Report).
-- **Commit**: see tracker.
+- **Commit**: 3edfec6 — fix(phase24): final docs and README synchronization — closes: Final Docs/README Sync
