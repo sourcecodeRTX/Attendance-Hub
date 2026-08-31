@@ -25,7 +25,7 @@ Source of truth for *how it's being fixed*: this file.
 | 15 | Backup/Restore & Activity-Log Correctness | Complete | 2026-08-31 | 87a9922 |
 | 16 | Test-Quality Fixes | Complete | 2026-08-31 | c1142ca |
 | 17 | Medium Docs/UI-Text Contradictions | Complete | 2026-08-31 | e132374 |
-| 18 | Low Sweep — Lib Correctness | Not started | | |
+| 18 | Low Sweep — Lib Correctness | Complete | 2026-08-31 | |
 | 19 | Low Sweep — Frontend UX/A11y Polish | Not started | | |
 | 20 | Low Sweep — Ops/Tooling | Not started | | |
 | 21 | CI Foundation | Not started | | |
@@ -846,5 +846,62 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Interactions with prior fixes**: Reconciles F-020 (`AuthGuard` `/backup` route permission); reinforces Phase 8/10 CSV-only format integrity; maintains accessibility and test hermeticity from Phases 12–16.
 - **Residual risk / follow-ups**: None.
 - **Commit**: see tracker.
+
+## Phase 18 Notes
+
+**Date:** 2026-08-31. **Scope:** Backend/lib low-severity correctness (F-031 middleware auth-cookie heuristic, CR management server actions, realtime subjects subscription, fail-fast env validation, date/PDF formatting robustness, validation schemas, and SSR store safety).
+
+### [FIXED] Middleware auth-cookie heuristic uses substring match (F-031) & Lib Correctness Sweep
+
+- **Original severity**: Low
+- **Phase**: 18 — Low Sweep — Lib Correctness
+- **Files changed**: `src/middleware.ts`, `src/middleware.test.ts` (new), `src/app/(dashboard)/actions.ts`, `src/app/(dashboard)/actions.test.ts`, `src/app/(dashboard)/cr-management/page.tsx`, `src/lib/supabase/realtime.ts`, `src/lib/supabase/realtime.test.ts`, `src/lib/supabase/auth.ts`, `src/lib/supabase/auth.test.ts`, `src/lib/supabase/client.ts`, `src/lib/utils/date.ts`, `src/lib/utils/date.test.ts`, `src/lib/utils/pdf-generator.ts`, `src/lib/utils/validation.ts`, `src/lib/utils/validation.test.ts`, `src/lib/utils/csv-import.ts`, `src/lib/utils/csv-import.test.ts`, `src/lib/stores/auth-store.ts`, `src/lib/stores/auth-store.test.ts`
+- **Re-verification (Step 1)**: Audited entire `src/lib/` and related backend/action boundaries:
+  1. `src/middleware.ts:8-12`: `cookie.name.includes('-auth-token')` substring matching matched arbitrary third-party cookies containing `-auth-token`, bypassing the public fast-path for unauthenticated requests and triggering unnecessary Supabase session roundtrips.
+  2. `src/app/(dashboard)/cr-management/page.tsx:258, 308`: Called `supabase.auth.admin.updateUserById` directly from the client browser. Since client browser only holds the anonymous public key, deleting CR accounts or resetting CR passwords threw runtime permission errors (`AuthApiError: Not authorized`).
+  3. `src/lib/supabase/realtime.ts:51-69`: `subscribeToSubjects` forced a `filter: 'section_id=eq.' + sectionId` filter on the `subjects` table. Because `section_id` was dropped from `subjects` in migration 013 (linked via `subject_sections` junction), Supabase Postgres Realtime dropped all row change events.
+  4. `src/lib/supabase/auth.ts:54-69` and `src/lib/supabase/client.ts:6-14`: Used bare `!` non-null assertions on `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`, delaying configuration errors to deep runtime failures instead of failing fast with a clear diagnostic.
+  5. `src/lib/utils/date.ts`: `getLocalDateString` produced `'NaN-NaN-NaN'` when given invalid `Date` objects (`new Date('invalid')`).
+  6. `src/lib/utils/pdf-generator.ts:13-19`: `formatDate` appended `T00:00:00` blindly, yielding `Invalid Date` when provided an ISO timestamp string already containing `'T'`.
+  7. `src/lib/utils/validation.ts` and `src/lib/utils/csv-import.ts`: Lacked centralized `studentSchema` (`StudentInput`) for validation, and `parseStudentsCsv` failed when column headers contained surrounding whitespace (e.g. `" roll_number , full_name "`).
+  8. `src/lib/stores/auth-store.ts:54-64`: `clearAllPersistedStores` called `localStorage` directly without checking `typeof window === 'undefined'`, risking SSR/Node exceptions.
+- **Root cause (Step 2)**: Substring cookie matching in middleware; client-side invocation of service-role admin auth APIs without server actions; realtime filter targeting dropped database column; missing fail-fast configuration checks; unhandled invalid date / ISO formats; missing student schema and CSV header trimming; unguarded localStorage access in SSR.
+- **Edge cases enumerated (Step 3)**:
+  - *Supabase Auth Cookie Pattern*: Regex `/^sb-[a-z0-9_-]+-auth-token(\.\d+)?$/i` matches standard project cookies and chunked cookies (`.0`, `.1`) while strictly rejecting spoofed or unrelated tokens (`attacker-auth-token`, `custom-auth-token`).
+  - *CR Management Authorization*: `deactivateManagedAuthUser` allows `primary_teacher` to deactivate only `cr` accounts within their own university; `resetManagedUserPassword` allows `primary_teacher` to reset only `cr` passwords, updating `auth.users` password and setting `must_change_password: true` in the `users` profile. Self-modification and privilege escalation attempts are strictly rejected.
+  - *Realtime Subject Channels*: `subscribeToSubjects('*', callback)` listens to unscoped table changes on `subjects:all` with no column filter; scoped invocations filter by `department_id`.
+  - *Fail-Fast Environment Guards*: Throws explicit diagnostic errors when public Supabase environment variables are missing.
+  - *Safe Date Parsing*: `getLocalDateString` falls back to current local date if an invalid `Date` is passed; `formatDate` parses dates with or without `'T'` safely.
+  - *Student Schema & CSV Whitespace*: `studentSchema` validates trimmed names (min 2, max 100) and roll numbers (min 1, max 50); `parseStudentsCsv` trims header names before alias resolution.
+  - *SSR Store Purge*: `clearAllPersistedStores` checks `typeof window !== 'undefined'` and wraps storage calls in `try/catch`.
+- **Fix design considered (Step 4)**: (a) patch only F-031 in middleware and leave CR/realtime leads for future sessions — rejected: protocol specifies Phase 18 as the comprehensive lib correctness sweep; (b) execute full Gauntlet loop across middleware, server actions, realtime subscriptions, config guards, date handling, validation schemas, and store persistence with complete automated unit tests — chosen.
+- **Fix applied (Step 5)**:
+  - Updated `src/middleware.ts` with `SUPABASE_AUTH_COOKIE_PATTERN` and exported `hasSupabaseAuthCookie` and `isProtectedPath`.
+  - Updated `src/app/(dashboard)/actions.ts` to allow `primary_teacher` in `deactivateManagedAuthUser` and added `resetManagedUserPassword` server action.
+  - Updated `src/app/(dashboard)/cr-management/page.tsx` to call `deactivateManagedAuthUser` and `resetManagedUserPassword`.
+  - Updated `src/lib/supabase/realtime.ts` to support unscoped (`'*'`) and department-scoped subject subscriptions.
+  - Added fail-fast env validation in `src/lib/supabase/auth.ts` and `src/lib/supabase/client.ts`.
+  - Hardened `getLocalDateString` in `src/lib/utils/date.ts` and `formatDate` in `src/lib/utils/pdf-generator.ts`.
+  - Added `studentSchema` / `StudentInput` in `src/lib/utils/validation.ts` and `transformHeader: (h) => h.trim()` in `src/lib/utils/csv-import.ts`.
+  - Hardened `clearAllPersistedStores` in `src/lib/stores/auth-store.ts` for non-browser execution.
+- **Tests added/modified (Step 6)**:
+  - `src/middleware.test.ts` (8 new tests): Validates standard/chunked Supabase auth cookie matching, rejection of spoofed tokens, empty cookie values, and route protection rules.
+  - `src/app/(dashboard)/actions.test.ts` (+7 new tests): Validates `primary_teacher` deactivating CR, rejection of teacher/admin deactivation by primary teacher, and full `resetManagedUserPassword` authorization / password reset behavior.
+  - `src/lib/supabase/realtime.test.ts` (+1 test): Validates `subscribeToSubjects('*')` unscoped channel without column filter and scoped subject subscription.
+  - `src/lib/supabase/auth.test.ts` (+1 test): Validates fail-fast error thrown on missing Supabase env vars.
+  - `src/lib/utils/date.test.ts` (+1 test): Validates invalid date handling in `getLocalDateString`.
+  - `src/lib/utils/validation.test.ts` (+3 tests): Validates `studentSchema` name length, roll number length, and whitespace rejection.
+  - `src/lib/utils/csv-import.test.ts` (+1 test): Validates CSV import with whitespace in column headers.
+  - `src/lib/stores/auth-store.test.ts` (+1 test): Validates SSR safety of `clearAllPersistedStores`.
+  - Pre-fix proof: Tests failed against pre-fix code (substring match allowed `attacker-auth-token`, `resetManagedUserPassword` was undefined, `subscribeToSubjects('*')` produced invalid `section_id=eq.*`, `createManagedUser` did not reject missing env, `studentSchema` was undefined, header whitespace rejected valid columns).
+- **Full verification result (Step 7)**:
+  - `pnpm run lint` EXIT=0 (14 warnings <= baseline 17, 0 errors).
+  - `pnpm exec tsc --noEmit` EXIT=0 (clean).
+  - `pnpm run test` EXIT=0 (37 test files / 298 tests passed).
+  - `pnpm run build` EXIT=0 (all 24 routes prerender clean).
+- **Interactions with prior fixes**: Reconciles F-031; fixes Phase 13 CR management runtime failure and realtime subject subscription lead; preserves Phase 3/9 server-side action validation and Phase 8 CSV parser contract.
+- **Residual risk / follow-ups**: None.
+- **Commit**: see tracker.
+
 
 

@@ -8,6 +8,7 @@ import {
   universitySettingsSchema,
   managedAuthUserSchema,
   managedProfileSchema,
+  studentSchema,
 } from '@/lib/utils/validation';
 
 describe('registerSchema', () => {
@@ -204,5 +205,26 @@ describe('universitySettingsSchema', () => {
 
   it('rejects non-numeric thresholds', () => {
     expect(universitySettingsSchema.safeParse({ ...base, attendanceThreshold: '75' }).success).toBe(false);
+  });
+});
+
+describe('studentSchema', () => {
+  const validStudent = { fullName: 'John Doe', rollNumber: 'CS-101' };
+
+  it('accepts valid student payload', () => {
+    expect(studentSchema.safeParse(validStudent).success).toBe(true);
+  });
+
+  it('rejects whitespace-only or empty full name and roll number', () => {
+    expect(studentSchema.safeParse({ ...validStudent, fullName: '   ' }).success).toBe(false);
+    expect(studentSchema.safeParse({ ...validStudent, fullName: '' }).success).toBe(false);
+    expect(studentSchema.safeParse({ ...validStudent, rollNumber: '   ' }).success).toBe(false);
+    expect(studentSchema.safeParse({ ...validStudent, rollNumber: '' }).success).toBe(false);
+  });
+
+  it('rejects single-character full name and over-long strings', () => {
+    expect(studentSchema.safeParse({ ...validStudent, fullName: 'A' }).success).toBe(false);
+    expect(studentSchema.safeParse({ ...validStudent, fullName: 'A'.repeat(101) }).success).toBe(false);
+    expect(studentSchema.safeParse({ ...validStudent, rollNumber: 'R'.repeat(51) }).success).toBe(false);
   });
 });

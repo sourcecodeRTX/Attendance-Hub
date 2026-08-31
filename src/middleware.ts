@@ -5,13 +5,15 @@ import { createServerClient } from '@supabase/ssr';
 const AUTH_ROUTES = new Set(['/login', '/register', '/forgot-password']);
 const ALWAYS_PUBLIC = new Set(['/']);
 
-function hasSupabaseAuthCookie(request: NextRequest): boolean {
+export const SUPABASE_AUTH_COOKIE_PATTERN = /^sb-[a-z0-9_-]+-auth-token(\.\d+)?$/i;
+
+export function hasSupabaseAuthCookie(request: NextRequest): boolean {
   return request.cookies
     .getAll()
-    .some((cookie) => cookie.name.includes('-auth-token') && cookie.value.length > 0);
+    .some((cookie) => SUPABASE_AUTH_COOKIE_PATTERN.test(cookie.name) && cookie.value.trim().length > 0);
 }
 
-function isProtectedPath(pathname: string): boolean {
+export function isProtectedPath(pathname: string): boolean {
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||

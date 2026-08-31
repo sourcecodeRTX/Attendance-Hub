@@ -52,13 +52,17 @@ export function getAuthStorageKey(uid: string) {
 
 // Clear all persisted store data from localStorage on logout
 export function clearAllPersistedStores(uid?: string | null) {
+  if (typeof window === 'undefined') return;
+
   if (uid) {
     clearUidScopedStores(uid);
   }
 
   // Backward-compatible cleanup for legacy global keys.
-  localStorage.removeItem('auth-storage');
-  localStorage.removeItem('ui-storage');
-  localStorage.removeItem('prefs-storage');
+  try {
+    localStorage.removeItem('auth-storage');
+    localStorage.removeItem('ui-storage');
+    localStorage.removeItem('prefs-storage');
+  } catch {}
   setCurrentUid(null);
 }

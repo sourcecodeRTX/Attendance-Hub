@@ -98,21 +98,42 @@ describe('subscribeToAttendanceSessions', () => {
 });
 
 describe('subscribeToSubjects', () => {
-  it('creates subjects channel scoped to section_id and forwards payloads', () => {
+  it('creates unscoped subjects:all channel without column filter when "*" is passed', () => {
     const received: unknown[] = [];
-    subscribeToSubjects('sec-20', (payload) => received.push(payload));
+    subscribeToSubjects('*', (payload) => received.push(payload));
 
     expect(mockedCreateClient).toHaveBeenCalledTimes(1);
     expect(channelCalls).toHaveLength(1);
-    expect(channelCalls[0].name).toBe('subjects:section_id=sec-20');
-    expect(subscribedChannels).toEqual(['subjects:section_id=sec-20']);
+    expect(channelCalls[0].name).toBe('subjects:all');
+    expect(subscribedChannels).toEqual(['subjects:all']);
+
+    const config = channelCalls[0].eventConfig as Record<string, unknown>;
+    expect(config).toEqual({
+      event: '*',
+      schema: 'public',
+      table: 'subjects',
+    });
+
+    const fakePayload = { eventType: 'INSERT', new: { id: 'sub-1', name: 'Math' }, old: {} };
+    channelCalls[0].callback!(fakePayload);
+    expect(received).toEqual([fakePayload]);
+  });
+
+  it('creates scoped subjects channel when a department/scope ID is provided', () => {
+    const received: unknown[] = [];
+    subscribeToSubjects('dept-20', (payload) => received.push(payload));
+
+    expect(mockedCreateClient).toHaveBeenCalledTimes(1);
+    expect(channelCalls).toHaveLength(1);
+    expect(channelCalls[0].name).toBe('subjects:scope=dept-20');
+    expect(subscribedChannels).toEqual(['subjects:scope=dept-20']);
 
     const config = channelCalls[0].eventConfig as Record<string, unknown>;
     expect(config).toMatchObject({
       event: '*',
       schema: 'public',
       table: 'subjects',
-      filter: 'section_id=eq.sec-20',
+      filter: 'department_id=eq.dept-20',
     });
 
     const fakePayload = { eventType: 'DELETE', new: {}, old: { id: 'sub-1' } };

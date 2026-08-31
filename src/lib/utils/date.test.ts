@@ -17,4 +17,10 @@ describe('getLocalDateString (F-011)', () => {
     const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     expect(getLocalDateString()).toBe(expected);
   });
+
+  it('handles invalid date objects gracefully without returning NaN-NaN-NaN', () => {
+    const now = new Date();
+    const expected = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    expect(getLocalDateString(new Date('invalid-date-string'))).toBe(expected);
+  });
 });

@@ -8,7 +8,7 @@ vi.mock('@/lib/supabase/client', () => ({
   }),
 }));
 
-import { resetPasswordForEmail } from './auth';
+import { resetPasswordForEmail, createManagedUser } from './auth';
 
 describe('resetPasswordForEmail redirect target', () => {
   beforeEach(() => {
@@ -52,5 +52,26 @@ describe('resetPasswordForEmail redirect target', () => {
     vi.stubGlobal('window', undefined);
     await resetPasswordForEmail('user@example.com');
     expect(resetPasswordForEmailMock).toHaveBeenCalledWith('user@example.com');
+  });
+});
+
+describe('createManagedUser environment validation', () => {
+  const origUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const origKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  beforeEach(() => {
+    delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  });
+
+  afterEach(() => {
+    if (origUrl) process.env.NEXT_PUBLIC_SUPABASE_URL = origUrl;
+    if (origKey) process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = origKey;
+  });
+
+  it('throws a descriptive error when NEXT_PUBLIC_SUPABASE_URL or ANON_KEY is missing', async () => {
+    await expect(createManagedUser('test@uni.com', 'Pass1234!')).rejects.toThrow(
+      'Missing Supabase public environment variables'
+    );
   });
 });

@@ -4,8 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { getUserSections, createUserSection, deleteUserSectionsByUser, getPrimarySectionId } from '@/lib/db/user-sections';
 import { logActivity } from '@/lib/db/activity';
-import { createManagedAuthUser, createManagedUserProfile } from '../actions';
-import { supabase } from '@/lib/supabase/client';
+import {
+  createManagedAuthUser,
+  createManagedUserProfile,
+  deactivateManagedAuthUser,
+  resetManagedUserPassword,
+} from '../actions';
 import { db } from '@/lib/db/index';
 import type { User, Section, UserSection } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -255,10 +259,10 @@ export default function CRManagementPage() {
 
     setDeleteSubmitting(true);
     try {
-      await supabase.auth.admin.updateUserById(deleteCR.id, {
-        ban_duration: 'none',
-        user_metadata: { disabled: true },
-      });
+      const deactivateResult = await deactivateManagedAuthUser(deleteCR.id);
+      if (!deactivateResult.success) {
+        throw new Error(deactivateResult.error || 'Failed to deactivate CR account');
+      }
 
       const crUser = await db.users.get(deleteCR.id);
       if (crUser) {
@@ -305,9 +309,10 @@ export default function CRManagementPage() {
 
     setResetSubmitting(true);
     try {
-      await supabase.auth.admin.updateUserById(resetCR.id, {
-        password: resetCR.staffId,
-      });
+      const resetResult = await resetManagedUserPassword(resetCR.id, resetCR.staffId);
+      if (!resetResult.success) {
+        throw new Error(resetResult.error || 'Failed to reset password');
+      }
 
       const crUser = await db.users.get(resetCR.id);
       if (crUser) {

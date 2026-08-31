@@ -53,4 +53,15 @@ describe('useAuthStore (F-021)', () => {
     expect(localStorage.getItem('auth-storage-usr-1')).toBeNull();
     expect(localStorage.getItem('auth-storage')).toBeNull();
   });
+
+  it('clearAllPersistedStores does not throw when executed in a non-browser environment', () => {
+    const origWindow = globalThis.window;
+    try {
+      // @ts-expect-error simulating SSR
+      delete globalThis.window;
+      expect(() => clearAllPersistedStores('usr-1')).not.toThrow();
+    } finally {
+      globalThis.window = origWindow;
+    }
+  });
 });

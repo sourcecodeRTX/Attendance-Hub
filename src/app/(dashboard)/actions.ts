@@ -138,7 +138,12 @@ export async function deactivateManagedAuthUser(
   userId: string
 ): Promise<{ success: boolean; error?: string }> {
   const caller = await getVerifiedCaller();
-  if (!caller || (caller.role !== 'super_admin' && caller.role !== 'admin')) {
+  if (!caller) {
+    return { success: false, error: 'Insufficient permissions.' };
+  }
+
+  const allowedTargets = CREATABLE_PROFILE_ROLES[caller.role];
+  if (!allowedTargets) {
     return { success: false, error: 'Insufficient permissions.' };
   }
 
@@ -156,10 +161,7 @@ export async function deactivateManagedAuthUser(
   if (target.id === caller.userId) {
     return { success: false, error: 'Cannot deactivate your own account.' };
   }
-  if (target.role === 'super_admin') {
-    return { success: false, error: 'Insufficient permissions.' };
-  }
-  if (caller.role === 'admin' && target.role === 'admin') {
+  if (!allowedTargets.includes(target.role as UserRole)) {
     return { success: false, error: 'Insufficient permissions.' };
   }
 
@@ -173,6 +175,63 @@ export async function deactivateManagedAuthUser(
 
   if (error) {
     return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+export async function resetManagedUserPassword(
+  userId: string,
+  newPassword?: string
+): Promise<{ success: boolean; error?: string }> {
+  const caller = await getVerifiedCaller();
+  if (!caller) {
+    return { success: false, error: 'Insufficient permissions.' };
+  }
+
+  const allowedTargets = CREATABLE_PROFILE_ROLES[caller.role];
+  if (!allowedTargets) {
+    return { success: false, error: 'Insufficient permissions.' };
+  }
+
+  const adminClient = createAdminClient();
+
+  const { data: target } = await adminClient
+    .from('users')
+    .select('id, role, staff_id, university_id')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (!target || target.university_id !== caller.universityId) {
+    return { success: false, error: 'Insufficient permissions.' };
+  }
+  if (target.id === caller.userId) {
+    return { success: false, error: 'Cannot reset your own password via admin action.' };
+  }
+  if (!allowedTargets.includes(target.role as UserRole)) {
+    return { success: false, error: 'Insufficient permissions.' };
+  }
+
+  const passwordToSet = newPassword?.trim() || target.staff_id;
+  if (!passwordToSet || passwordToSet.length < 1) {
+    return { success: false, error: 'Password cannot be empty.' };
+  }
+
+  const { error: authError } = await adminClient.auth.admin.updateUserById(userId, {
+    password: passwordToSet,
+  });
+
+  if (authError) {
+    return { success: false, error: authError.message };
+  }
+
+  const { error: profileError } = await adminClient
+    .from('users')
+    .update({ must_change_password: true })
+    .eq('id', userId);
+
+  if (profileError) {
+    return { success: false, error: profileError.message };
   }
 
   return { success: true };

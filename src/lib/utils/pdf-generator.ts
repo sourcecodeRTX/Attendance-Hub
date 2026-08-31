@@ -11,7 +11,11 @@ const GREEN = '#16a34a';
 const LIGHT_AMBER = '#fef3c7';
 
 function formatDate(d: string) {
-  return new Date(d + 'T00:00:00').toLocaleDateString('en-IN', {
+  if (!d) return '';
+  const dateStr = d.includes('T') ? d : `${d}T00:00:00`;
+  const dateObj = new Date(dateStr);
+  if (isNaN(dateObj.getTime())) return d;
+  return dateObj.toLocaleDateString('en-IN', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

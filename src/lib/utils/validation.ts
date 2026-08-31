@@ -115,6 +115,15 @@ export const managedProfileSchema = z.object({
   email: emailField,
 });
 
+export const studentSchema = z.object({
+  fullName: personName('Student name'),
+  rollNumber: z
+    .string()
+    .trim()
+    .min(1, 'Roll number is required')
+    .max(50, 'Roll number is too long'),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
@@ -125,4 +134,5 @@ export type SpecialisationInput = z.infer<typeof specialisationSchema>;
 export type SectionInput = z.infer<typeof sectionSchema>;
 export type TeacherAccountInput = z.infer<typeof teacherAccountSchema>;
 export type SubjectInput = z.infer<typeof subjectSchema>;
+export type StudentInput = z.infer<typeof studentSchema>;
 export type UniversitySettingsInput = z.infer<typeof universitySettingsSchema>;

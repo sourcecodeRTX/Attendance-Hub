@@ -110,4 +110,12 @@ describe('parseStudentsCsv', () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.students.map((s) => s.fullName)).toEqual(['李明', 'مرحبا']);
   });
+
+  it('handles headers with leading and trailing whitespace', () => {
+    const result = parseStudentsCsv(csv(['  roll_number  ,  full_name  ', '101,John Doe']));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.students).toEqual([{ rollNumber: '101', fullName: 'John Doe' }]);
+    }
+  });
 });

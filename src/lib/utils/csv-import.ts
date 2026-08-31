@@ -30,6 +30,7 @@ export function parseStudentsCsv(csvText: string): StudentsCsvResult {
     parsed = Papa.parse<Record<string, string>>(csvText, {
       header: true,
       skipEmptyLines: true,
+      transformHeader: (h) => h.trim(),
     });
   } catch {
     return { ok: false, error: 'Failed to parse file as CSV.' };

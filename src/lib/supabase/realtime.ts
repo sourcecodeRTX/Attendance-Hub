@@ -49,21 +49,27 @@ export function subscribeToStudents(
 }
 
 export function subscribeToSubjects(
-  sectionId: string,
-  callback: RealtimeCallback<Subject>
+  scopeOrCallback: string | RealtimeCallback<Subject>,
+  maybeCallback?: RealtimeCallback<Subject>
 ) {
+  const scope = typeof scopeOrCallback === 'string' ? scopeOrCallback : '*';
+  const callback = typeof scopeOrCallback === 'function' ? scopeOrCallback : maybeCallback!;
   const supabase = createClient();
+
+  const isAll = !scope || scope === '*' || scope === 'all';
+  const channelName = isAll ? 'subjects:all' : `subjects:scope=${scope}`;
+  const config: { event: string; schema: string; table: string; filter?: string } = {
+    event: '*',
+    schema: 'public',
+    table: 'subjects',
+  };
+
+  if (!isAll) {
+    config.filter = scope.includes('=') ? scope : `department_id=eq.${scope}`;
+  }
+
   return supabase
-    .channel(`subjects:section_id=${sectionId}`)
-    .on(
-      'postgres_changes' as any,
-      {
-        event: '*',
-        schema: 'public',
-        table: 'subjects',
-        filter: `section_id=eq.${sectionId}`,
-      },
-      callback
-    )
+    .channel(channelName)
+    .on('postgres_changes' as any, config, callback)
     .subscribe();
 }
