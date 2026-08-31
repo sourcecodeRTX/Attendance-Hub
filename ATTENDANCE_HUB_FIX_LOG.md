@@ -24,7 +24,7 @@ Source of truth for *how it's being fixed*: this file.
 | 14 | State Management & Hooks Robustness | Complete | 2026-08-23 | 3822942 |
 | 15 | Backup/Restore & Activity-Log Correctness | Complete | 2026-08-31 | 87a9922 |
 | 16 | Test-Quality Fixes | Complete | 2026-08-31 | c1142ca |
-| 17 | Medium Docs/UI-Text Contradictions | Complete | 2026-08-31 |  |
+| 17 | Medium Docs/UI-Text Contradictions | Complete | 2026-08-31 | e132374 |
 | 18 | Low Sweep — Lib Correctness | Not started | | |
 | 19 | Low Sweep — Frontend UX/A11y Polish | Not started | | |
 | 20 | Low Sweep — Ops/Tooling | Not started | | |
