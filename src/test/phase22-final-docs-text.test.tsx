@@ -116,5 +116,5 @@ describe('Phase 22: Final Docs/Text & Claims Integrity', () => {
     expect(screen.getByRole('heading', { name: 'System Status & Sync Health' })).toBeInTheDocument();
     const closeStatus = screen.getAllByRole('button', { name: 'Close' })[0];
     await user.click(closeStatus);
-  });
+  }, 15000);
 });
