@@ -1,9 +1,9 @@
 <div align="center">
   
-  # 🎯 Attendance Hub (CRM System)
+  # 🎯 Attendance Hub
   
   <p align="center">
-    <strong>A Next-Generation, Highly Secure CRM and Attendance Tracking Platform</strong>
+    <strong>A Next-Generation, Highly Secure Academic Attendance Tracking and Student Information Platform</strong>
   </p>
 
   <p align="center">
@@ -12,14 +12,18 @@
     <img src="https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
     <img src="https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white" alt="Supabase" />
     <img src="https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS" />
+    <img src="https://img.shields.io/badge/Vitest-6E9F18?style=for-the-badge&logo=vitest&logoColor=white" alt="Vitest" />
+    <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License: MIT" />
   </p>
 
   <p align="center">
     <a href="#-about-the-project">About</a> •
     <a href="#-key-features">Features</a> •
     <a href="#-tech-stack">Tech Stack</a> •
-    <a href="#-security-architecture">Security</a> •
-    <a href="#-getting-started">Getting Started</a>
+    <a href="#-role-hierarchy--access-control">Roles</a> •
+    <a href="#-security--data-integrity-architecture">Security</a> •
+    <a href="#-getting-started">Getting Started</a> •
+    <a href="#-testing--verification-gates">Testing</a>
   </p>
 </div>
 
@@ -27,53 +31,97 @@
 
 ## 📖 About The Project
 
-**Attendance Hub** is a fully-featured, modern CRM designed specifically for seamless attendance tracking and comprehensive data management. Built from the ground up with a focus on enterprise-grade security and a smooth user experience, it empowers organizations to easily monitor attendance, generate insightful reports, and manage data even while offline.
+**Attendance Hub** is a modern, offline-first attendance management and student tracking platform designed specifically for academic institutions, universities, and departments. Built with Next.js 14 App Router, Supabase PostgreSQL, and Dexie.js (IndexedDB), Attendance Hub provides instantaneous local response times, reliable multi-tab background synchronization, strict role-based access control, and complete data ownership.
+
+Whether connected online or operating in network-constrained environments, teachers and student representatives can mark attendance, calculate real-time section statistics, export audit-ready PDF/CSV reports, and securely synchronize records to the cloud.
+
+---
 
 ## ✨ Key Features
 
-- 👥 **Advanced Attendance Tracking**: Effortlessly manage, monitor, and record daily attendance with a highly intuitive user interface.
-- 🔐 **Enterprise-Grade Security**: Secure authentication, authorization, and data encryption using Supabase's powerful infrastructure.
-- 📶 **Robust Offline Support**: Continue working even without internet access. Data is synced automatically via IndexedDB using Dexie.js.
-- 📄 **Dynamic Document Generation**: Export reports to PDF via React-PDF, exchange data as CSV via Papaparse, and take full JSON backups packaged with JSZip.
-- 🎨 **Sleek, Modern UI/UX**: Designed with accessible component primitives from Base UI, fully responsive Tailwind CSS layouts, and elegant animations.
-- ⚡ **Lightning Fast Performance**: Leverages Next.js App Router for optimal rendering, fast load times, and improved SEO.
+- 👥 **Intuitive Attendance Tracking**: Mark daily and period-based attendance with responsive keyboard navigation, instant status toggles (Present, Absent, Duty Leave), unsaved-changes protection, and automatic duplicate period prevention.
+- 📶 **Robust Offline-First Architecture**: Continuous local operability backed by IndexedDB via Dexie.js. Local writes are transactional, and queued records synchronize to Supabase in the background with exponential backoff and lease management.
+- 🔄 **Monotonic Revision Conflict Resolution**: Multi-device sync uses server-managed monotonic revision counters to resolve concurrent updates deterministically without relying on unsynchronized client clocks.
+- 🛡️ **PostgreSQL Row Level Security (RLS)**: Fine-grained access policies across 23 append-only database migrations guarantee strict multi-tenant and department-level data isolation.
+- 📄 **Dynamic Report Generation & Safe Import**:
+  - Export audit-ready attendance summaries to PDF via `@react-pdf/renderer`.
+  - Export CSV logs with OWASP formula-injection neutralization via Papaparse.
+  - Import student rosters via a hardened 5MB CSV parser with header alias resolution and in-file duplicate detection.
+  - Package full university database backups as encrypted JSON archives using JSZip.
+- 🎨 **Accessible & Responsive UI/UX**: Built with accessible component primitives from Base UI, fully keyboard-traversable tables and dialogs, live-region state announcements, `prefers-reduced-motion` compliance, and Tailwind CSS.
+- ⚡ **High Performance & Virtualization**: Next.js 14 App Router with React 18, TanStack Virtual for rendering large student lists smoothly, and debounced local cache re-reads.
+
+---
 
 ## 💻 Tech Stack
 
 ### Core Technologies
-- **[Next.js 14](https://nextjs.org/)** - React framework for production with App Router.
-- **[TypeScript](https://www.typescriptlang.org/)** - Strongly typed programming language.
-- **[Tailwind CSS](https://tailwindcss.com/)** - Utility-first CSS framework.
-- **[Supabase](https://supabase.com/)** - Open source Firebase alternative for Auth and PostgreSQL.
+- **[Next.js 14](https://nextjs.org/)** - React framework with App Router, server actions, and route handlers.
+- **[React 18](https://react.dev/)** - Component architecture with concurrent rendering and hooks.
+- **[TypeScript 5](https://www.typescriptlang.org/)** - Strict type safety across client and server boundaries.
+- **[Tailwind CSS](https://tailwindcss.com/)** - Utility-first styling with responsive design and motion tokens.
+- **[Supabase](https://supabase.com/)** - Open-source PostgreSQL backend with Row Level Security and Auth (`@supabase/ssr`, `@supabase/supabase-js`).
 
-### State & Storage
-- **[Zustand](https://zustand-demo.pmnd.rs/)** - A small, fast, and scalable bearbones state-management solution.
-- **[Dexie.js](https://dexie.org/)** - A minimalist wrapper for IndexedDB for offline data persistence.
+### State Management & Offline Persistence
+- **[Zustand 5](https://zustand-demo.pmnd.rs/)** - Fast, lightweight state stores for auth, UI state, and sync status.
+- **[Dexie.js 4](https://dexie.org/)** - IndexedDB wrapper providing transactional multi-table local persistence.
 
-### UI & UX
-- **[Base UI](https://base-ui.com/)** - Beautifully designed, accessible component primitives.
-- **[Lucide React](https://lucide.dev/)** - Beautiful & consistent icon toolkit.
-- **React Hook Form & [Zod](https://zod.dev/)** - Robust form handling and schema-based validation.
+### UI Primitives & Accessibility
+- **[Base UI](https://base-ui.com/)** - Unstyled, accessible UI component primitives (dialogs, dropdowns, popovers).
+- **[Lucide React](https://lucide.dev/)** - Accessible iconography.
+- **[TanStack Virtual](https://tanstack.com/virtual)** - DOM virtualization for high-volume student rosters.
+- **[Sonner](https://sonner.emilkowal.ski/)** - Accessible toast notifications with action callbacks and live region updates.
+- **React Hook Form & [Zod 4](https://zod.dev/)** - Schema validation enforced on client forms and server actions.
 
-## 🔒 Security Architecture
+### Document Processing & Serialization
+- **[@react-pdf/renderer](https://react-pdf.org/)** - Client-side PDF generation for attendance and section reports.
+- **[Papaparse](https://www.papaparse.com/)** - Fast, streaming CSV parser and serializer.
+- **[JSZip](https://stuk.github.io/jszip/)** - Archive packaging for full-university JSON data backup and restore.
 
-Security is built into the core of Attendance Hub to ensure your organization's data remains private, safe, and tamper-proof:
+### Testing & Tooling
+- **[Vitest 4](https://vitest.dev/)** - Unit and integration test runner with jsdom environment and V8 coverage.
+- **[@testing-library/react](https://testing-library.com/)** - Component and user-event testing.
+- **[fake-indexeddb](https://github.com/dumbmatter/fakeIndexedDB)** - In-memory IndexedDB mock for hermetic Dexie tests.
+- **[GitHub Actions](https://github.com/features/actions)** - Automated CI pipeline with frozen-lockfile quality gates.
 
-- **Row Level Security (RLS)**: Strict Supabase database policies ensure users can only access and manipulate data they are explicitly authorized to see.
-- **Server-Side Rendering (SSR) & Server Actions**: Sensitive operations and API keys are kept safely on the server and are never exposed to the client browser.
-- **Strict Data Validation**: End-to-end type safety with TypeScript, plus shared Zod schemas enforced on the client and re-validated inside server actions before any database write. All database access flows through Supabase's PostgREST API (parameterized queries), and Row Level Security constrains every query at the database level.
-- **Secure Authentication**: Leveraging `@supabase/ssr` for managing highly secure HTTP-only cookies and user sessions.
+---
+
+## 👥 Role Hierarchy & Access Control
+
+Attendance Hub enforces a 5-tier role hierarchy validated server-side and constrained by PostgreSQL Row Level Security:
+
+| Role | Database Identifier | Permissions & Capabilities |
+|---|---|---|
+| **Super Admin** | `super_admin` | Full institution management: create and oversee departments, manage institution settings, trigger whole-university backups/restores, wipe university data, inspect global activity logs. |
+| **Department Admin** | `admin` | Department administration: manage specialisations, sections, teachers, course representatives (CRs), and department-scoped activity logs and student records. |
+| **Primary Teacher** | `primary_teacher` | Section leadership: manage assigned section students, upload student rosters via CSV, create/reset Course Representatives, record and edit attendance sessions. |
+| **Regular Teacher** | `regular_teacher` | Subject instruction: mark attendance for assigned subjects across designated sections. |
+| **Course Representative** | `cr` | Student delegate: record daily attendance marks for their assigned section (subject to teacher locking and conflict resolution rules). |
+
+---
+
+## 🔒 Security & Data Integrity Architecture
+
+Security and integrity are built into every layer of Attendance Hub:
+
+1. **Row Level Security (RLS)**: Supabase PostgreSQL database policies constrain every query. Client JWTs cannot read or write records outside their institution or authorized department scope.
+2. **Server-Side Session Revalidation**: Privileged server actions verify caller identity via `@supabase/ssr` (`auth.getUser()`) rather than trusting client-supplied arguments or unverified cookies.
+3. **Fail-Fast Secrets Isolation**: Server-only keys (`SUPABASE_SERVICE_ROLE_KEY`) are kept on the server, never given a `NEXT_PUBLIC_` prefix, and validated at startup.
+4. **Strict Schema Sanitization**: Shared Zod schemas trim whitespace, enforce length bounds, validate UUID formats, and are re-evaluated inside server actions prior to database writes.
+5. **OWASP Formula Injection Defense**: All exported CSV fields are sanitized by prefixing dangerous characters (`=`, `+`, `-`, `@`, `\t`, `\r`) with single quotes.
+6. **Immutable Audit Trail Attribution**: Activity logs use database triggers to bind `performed_by_*` fields to `auth.uid()` directly from the PostgreSQL session profile, preventing log attribution tampering.
+
+---
 
 ## 🚀 Getting Started
 
-Follow these steps to set up the project locally on your machine.
+Follow these steps to set up Attendance Hub locally.
 
 ### Prerequisites
 
-Ensure you have the following installed:
-- Node.js (v18.17.0 or higher — required by Next.js 14)
-- [pnpm](https://pnpm.io/) (Recommended package manager)
-- A [Supabase](https://supabase.com/) account and project
+- **Node.js**: `v18.17.0` or higher (required by Next.js 14)
+- **Package Manager**: [pnpm](https://pnpm.io/) (`v10.0.0` or higher recommended)
+- **Backend**: A [Supabase](https://supabase.com/) account and project (PostgreSQL + Auth)
 
 ### Installation
 
@@ -88,50 +136,87 @@ Ensure you have the following installed:
    pnpm install
    ```
 
-3. **Set up environment variables:**
-   Create a `.env.local` file in the root directory. Copy the credentials from your Supabase dashboard:
+3. **Configure environment variables:**
+   Create a `.env.local` file in the project root directory:
    ```env
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-   SUPABASE_SERVICE_ROLE_KEY=your_service_role_secret_key
-   NEXT_PUBLIC_APP_URL=https://your-deployed-app-url
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
+   SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
+   NEXT_PUBLIC_APP_URL=http://localhost:3000
    ```
-   - `SUPABASE_SERVICE_ROLE_KEY` (server-only, **never** prefixed with `NEXT_PUBLIC_`) is required for privileged server flows (registration, backup/restore, user management); the app fails fast with a clear error if it is missing.
-   - `NEXT_PUBLIC_APP_URL` should be the public origin where the app is served; if unset on a client page, the password-reset email link falls back to the current browser origin. The redirect URL must also be allowlisted in your Supabase Auth settings.
 
-4. **Start the development server:**
+   - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project REST/Auth URL.
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase public anonymous API key (used in browser client).
+   - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role secret key (**server-only**, **never** exposed to client). Required for registration, user management, and super admin operations.
+   - `NEXT_PUBLIC_APP_URL`: The public URL of the application. Used for password-reset email redirects. (Falls back to `window.location.origin` in browser if omitted; ensure the redirect URL is allowlisted in Supabase Auth settings).
+
+4. **Apply Database Migrations:**
+   Execute the migration scripts located in `supabase/migrations/` sequentially against your Supabase PostgreSQL database (from `001_initial_schema.sql` through `023_attendance_period_unique.sql`):
+   ```bash
+   # If using the Supabase CLI:
+   supabase db push
+   ```
+
+5. **Start the development server:**
    ```bash
    pnpm dev
    ```
+   Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-5. **View the application:**
-   Open your browser and navigate to [http://localhost:3000](http://localhost:3000).
+---
 
-### Running Tests
+## 🧪 Testing & Verification Gates
 
-The project uses [Vitest](https://vitest.dev/) as its test runner (jsdom environment, `@` path alias supported):
+The codebase includes an extensive automated test suite executed with [Vitest](https://vitest.dev/):
 
 ```bash
-pnpm test           # run all tests once
-pnpm run test:watch # watch mode
-pnpm run test:coverage # run with V8 coverage report
+# Run all unit and integration tests
+pnpm test
+
+# Run tests in interactive watch mode
+pnpm run test:watch
+
+# Run tests with V8 code coverage report
+pnpm run test:coverage
+
+# Run ESLint validation
+pnpm run lint
+
+# Run TypeScript typecheck
+pnpm run typecheck
+
+# Run Next.js production build verification
+pnpm run build
 ```
 
-Tests live next to the code they cover as `*.test.ts` / `*.test.tsx`. Dexie/IndexedDB logic is tested against `fake-indexeddb`; Supabase clients are always mocked — tests never touch a real Supabase project.
+### Continuous Integration (CI)
+
+Every pull request and push to `main` is validated automatically via GitHub Actions (`.github/workflows/ci.yml`), executing the frozen-lockfile quality gates:
+1. `pnpm install --frozen-lockfile`
+2. `pnpm audit --audit-level=critical`
+3. `pnpm run lint`
+4. `pnpm run typecheck`
+5. `pnpm run test`
+6. `pnpm run build`
+
+---
 
 ## 🤝 Contributing
 
-We welcome contributions! Please feel free to submit a Pull Request.
+Contributions are welcome! Please follow these guidelines:
 
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
+3. Ensure all verification gates pass (`pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build`)
+4. Commit your changes (`git commit -m 'feat: add AmazingFeature'`)
+5. Push to the branch (`git push origin feature/AmazingFeature`)
+6. Open a Pull Request
+
+---
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the MIT License. See [`LICENSE`](LICENSE) for more information.
 
 ---
-<p align="center">Built with ❤️ for modern organizations.</p>
+<p align="center">Built with ❤️ for modern academic institutions.</p>
