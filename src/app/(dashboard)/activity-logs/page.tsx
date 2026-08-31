@@ -85,7 +85,7 @@ const ALL_ACTION_TYPES = Object.keys(ACTION_TYPE_LABELS) as ActivityActionType[]
 
 const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
-  admin: 'Admin',
+  admin: 'Department Admin',
   primary_teacher: 'Primary Teacher',
   regular_teacher: 'Regular Teacher',
   cr: 'Class Representative',

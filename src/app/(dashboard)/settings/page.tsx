@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { usePreferencesStore } from '@/lib/stores/preferences-store';
 import { supabase } from '@/lib/supabase/client';
@@ -122,7 +123,7 @@ export default function SettingsPage() {
                 Update your account password
               </p>
             </div>
-            <Button variant="outline" size="sm" nativeButton={false} render={<a href="/change-password" />}>
+            <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/change-password" />}>
               <Lock className="size-3.5" />
               Change Password
             </Button>

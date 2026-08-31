@@ -18,7 +18,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'ATT Tracker | University Attendance Management',
+  title: 'Attendance Hub | University Attendance Management',
   description: 'Multi-tenant university attendance management system',
 };
 

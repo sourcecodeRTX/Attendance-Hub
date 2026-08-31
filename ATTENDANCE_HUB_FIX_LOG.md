@@ -29,7 +29,7 @@ Source of truth for *how it's being fixed*: this file.
 | 19 | Low Sweep — Frontend UX/A11y Polish | Complete | 2026-08-31 | bca3ad1 |
 | 20 | Low Sweep — Ops/Tooling | Complete | 2026-08-31 | 43fa22d |
 | 21 | CI Foundation | Complete | 2026-08-31 | 6d76ee7 |
-| 22 | Low Sweep — Final Docs/Text | Not started | | |
+| 22 | Low Sweep — Final Docs/Text | Complete | 2026-08-31 | b68f219 |
 | 23 | Compressed Re-Audit | Not started | | |
 | 24 | Final Docs/README Sync | Not started | | |
 | 25 | Closing Report | Not started | | |
@@ -1058,4 +1058,47 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Interactions with prior fixes**: Codifies the entire verification suite built across Phases 0–20 (`lint`, `tsc`, `vitest`, `build`, `typecheck` script from Phase 20) into an automated CI pipeline.
 - **Residual risk / follow-ups**: None.
 - **Commit**: 6d76ee7 — fix(phase21): CI foundation — GitHub Actions workflow and automated verification quality gates
+
+## Phase 22 Notes
+
+**Date:** 2026-08-31. **Scope:** Low Sweep — Final Docs/Text (Eliminate landing page marketing fabrications, replace dead footer href="#" links with accessible Base UI Dialog modals, unify application title & branding across layout/login/sidebar, synchronize admin role labels to Department Admin, and ensure honest offline-first / open-source descriptions).
+
+### [FIXED] Final Docs, Text, Marketing Claims & Legal Modals Integrity
+
+- **Original severity**: Low
+- **Phase**: 22 — Low Sweep — Final Docs/Text
+- **Files changed**: `src/app/page.tsx`, `src/app/layout.tsx`, `src/app/(auth)/login/page.tsx`, `src/components/layout/sidebar.tsx`, `src/components/layout/header.tsx`, `src/app/(dashboard)/activity-logs/page.tsx`, `src/app/(dashboard)/settings/page.tsx`, `src/test/phase22-final-docs-text.test.tsx` (new)
+- **Re-verification (Step 1)**: Confirmed on current code:
+  1. `src/app/page.tsx` contained lingering SaaS template artifacts: `"Trusted by Universities Worldwide"`, `"No credit card required"`, `"Cancel anytime"`, `"AI-powered analytics and predictions"`, `"predictions"`, unsubstantiated `<100ms` / `99.9% Uptime SLA` claims, and six dead `href="#"` links in the footer (Privacy Policy, Terms of Service, Cookie Policy, Support, Contact, Status).
+  2. `src/app/layout.tsx:21` titled the application `'ATT Tracker | University Attendance Management'`, `src/app/(auth)/login/page.tsx:91` displayed `<CardTitle>ATT Tracker</CardTitle>`, and `src/components/layout/sidebar.tsx:59` used fallback string `'ATT Tracker'` instead of `'Attendance Hub'`.
+  3. `src/components/layout/header.tsx:34` and `src/app/(dashboard)/activity-logs/page.tsx:88` mapped `admin` to `'Admin'` instead of the standard `'Department Admin'`.
+  4. `src/app/(dashboard)/settings/page.tsx:126` used raw anchor navigation `<a href="/change-password" />` inside a Button render prop instead of Next.js `<Link>`.
+- **Root cause (Step 2)**: Early marketing copy, scaffold template titles, and placeholder footer links were never harmonized with actual system capabilities (IndexedDB/Dexie offline storage, Supabase RLS multi-tenancy, MIT open-source license) following architectural evolution.
+- **Edge cases enumerated (Step 3)**:
+  - *Marketing Honesty*: Replaced all AI/prediction and SaaS billing claims with authentic technical facts: automated section summaries, low-attendance threshold alerts, IndexedDB/Dexie.js offline persistence, Row-Level Security data isolation, and MIT licensing.
+  - *Dead Link Elimination*: Completely removed all `href="#"` anchors; replaced footer links with interactive, fully accessible Base UI `Dialog` modals for Privacy Policy (self-hosted Supabase + IndexedDB data ownership), Terms of Service (MIT License terms), Cookie Policy (essential auth cookies only, zero ad tracking), Support, Contact, and System Status.
+  - *SSR & Testing Resilience*: Guarded `useInView` hook in `src/app/page.tsx` against undefined `IntersectionObserver` in jsdom and SSR environments (`typeof IntersectionObserver === "undefined"`).
+  - *Branding Uniformity*: Ensured `title` metadata in `src/app/layout.tsx`, `CardTitle` in `login/page.tsx`, and sidebar fallback in `sidebar.tsx` consistently display "Attendance Hub".
+  - *Role Terminology Consistency*: Harmonized `ROLE_LABELS.admin` to `'Department Admin'` across `header.tsx`, `sidebar.tsx`, `dashboard/page.tsx`, and `activity-logs/page.tsx`.
+  - *Client Navigation in Settings*: Replaced raw `<a>` with Next.js `<Link>` for password changes.
+- **Fix design considered (Step 4)**: (a) remove footer links entirely — breaks standard web layout expectations; (b) point to non-existent external URLs — fragile and misleading; (c) build accessible Base UI Dialog modals detailing authentic institutional privacy, MIT license terms, essential cookie usage, and deployment support — chosen.
+- **Fix applied (Step 5)**:
+  - Updated `src/app/page.tsx` with honest copy and integrated accessible `Dialog` modals for Privacy Policy, Terms of Service, Cookie Policy, Support, Contact, and Status.
+  - Updated `src/app/layout.tsx` metadata title to `'Attendance Hub | University Attendance Management'`.
+  - Updated `src/app/(auth)/login/page.tsx` card title to `'Attendance Hub'`.
+  - Updated `src/components/layout/sidebar.tsx` fallback name to `'Attendance Hub'`.
+  - Updated `src/components/layout/header.tsx` and `src/app/(dashboard)/activity-logs/page.tsx` admin role label to `'Department Admin'`.
+  - Updated `src/app/(dashboard)/settings/page.tsx` to use Next.js `<Link>` for password change navigation.
+  - Created `src/test/phase22-final-docs-text.test.tsx` verifying claims integrity, dead link elimination, branding consistency, and modal interactivity.
+- **Tests added/modified (Step 6)**:
+  - `src/test/phase22-final-docs-text.test.tsx` (6 tests) asserting 0 `href="#"` dead links, elimination of AI/SaaS placeholders, presence of authentic technical copy, uniform "Attendance Hub" branding, "Department Admin" role labels, and full dialog modal rendering in jsdom.
+- **Full verification result (Step 7)**:
+  - `pnpm run lint` EXIT=0 (0 warnings, 0 errors).
+  - `pnpm exec tsc --noEmit` EXIT=0 (clean).
+  - `pnpm run test` EXIT=0 (42 test files / 324 tests passed).
+  - `pnpm run build` EXIT=0 (all 24 routes prerender clean).
+- **Interactions with prior fixes**: Reconciles remaining audit findings and low sweep text items; preserves Phase 19/20/21 UX, tooling, and CI pipeline invariants.
+- **Residual risk / follow-ups**: None.
+- **Commit**: [will be committed in next step]
+
 

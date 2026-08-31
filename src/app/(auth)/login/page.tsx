@@ -88,7 +88,7 @@ export default function LoginPage() {
   return (
     <Card>
       <CardHeader className="text-center">
-        <CardTitle className="text-2xl font-bold">ATT Tracker</CardTitle>
+        <CardTitle className="text-2xl font-bold">Attendance Hub</CardTitle>
         <CardDescription>Sign in to your account</CardDescription>
       </CardHeader>
       <CardContent>

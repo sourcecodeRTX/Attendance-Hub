@@ -4,6 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import {
   Users,
   Shield,
   Wifi,
@@ -30,6 +39,11 @@ function useInView(options: IntersectionObserverInit = {}) {
   const { threshold = 0.1, root, rootMargin } = options;
 
   useEffect(() => {
+    if (typeof window === "undefined" || typeof IntersectionObserver === "undefined") {
+      setIsInView(true);
+      return;
+    }
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -112,6 +126,7 @@ function Navigation() {
           <button
             className="md:hidden p-2 rounded-lg hover:bg-neutral-100 transition-colors"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label="Toggle mobile navigation menu"
           >
             {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -175,7 +190,7 @@ function HeroSection() {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full bg-neutral-100 border border-neutral-200/50 text-xs sm:text-sm text-neutral-600 mb-6 sm:mb-8 transition-all duration-300 hover:shadow-lg hover:scale-105">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              Trusted by Universities Worldwide
+              Open-Source Academic Attendance System
             </div>
 
             {/* Main Headline */}
@@ -211,11 +226,11 @@ function HeroSection() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-6 lg:gap-8 text-xs sm:text-sm text-neutral-500">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
-                No credit card required
+                100% Free & Open Source (MIT)
               </div>
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-3 h-3 sm:w-4 sm:h-4 text-green-500" />
-                Cancel anytime
+                Self-Hostable with Supabase
               </div>
             </div>
           </div>
@@ -358,7 +373,7 @@ function ProblemSolutionSection() {
                   { icon: CheckCircle2, text: "Digital records that never get lost" },
                   { icon: CheckCircle2, text: "Live dashboards for instant oversight" },
                   { icon: CheckCircle2, text: "Automatic reports generated instantly" },
-                  { icon: CheckCircle2, text: "AI-powered analytics and predictions" },
+                  { icon: CheckCircle2, text: "Automated section summaries & threshold alerts" },
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3 sm:gap-4">
                     <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-green-500/20 flex items-center justify-center shrink-0">
@@ -403,7 +418,7 @@ function FeaturesSection() {
     {
       icon: BarChart3,
       title: "Advanced Analytics",
-      description: "Visual dashboards showing attendance trends, patterns, and predictions to help improve outcomes.",
+      description: "Visual dashboards showing attendance percentages, section distributions, and low-attendance alerts.",
       className: "lg:col-span-1",
     },
     {
@@ -799,10 +814,10 @@ function TechStackSection() {
             {/* Key highlights */}
             <div className="grid grid-cols-2 gap-3 sm:gap-4">
               {[
-                { label: "Response Time", value: "<100ms" },
-                { label: "Offline Support", value: "100%" },
-                { label: "Data Encryption", value: "256-bit" },
-                { label: "Uptime SLA", value: "99.9%" },
+                { label: "Offline Storage", value: "Dexie.js" },
+                { label: "Offline First", value: "100%" },
+                { label: "Data Security", value: "RLS + TLS" },
+                { label: "Open Source", value: "MIT" },
               ].map((item, i) => (
                 <div 
                   key={i}
@@ -902,7 +917,7 @@ function CTASection() {
             Attendance Management?
           </h2>
           <p className="text-lg sm:text-xl text-neutral-400 mb-10 max-w-2xl mx-auto">
-            Join hundreds of universities already using Attendance Hub to streamline their academic operations.
+            Deploy Attendance Hub for your department or university to streamline academic operations.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -920,7 +935,7 @@ function CTASection() {
           </div>
 
           <p className="text-sm text-neutral-500 mt-8">
-            No credit card required. Cancel anytime.
+            Free and open source. Deployable with Supabase and Next.js.
           </p>
         </div>
       </div>
@@ -928,64 +943,254 @@ function CTASection() {
   );
 }
 
+type LegalModalType = 'privacy' | 'terms' | 'cookies' | 'support' | 'contact' | 'status' | null;
+
+interface ModalContentItem {
+  title: string;
+  subtitle: string;
+  sections: { heading: string; body: string }[];
+}
+
+const LEGAL_MODAL_DATA: Record<NonNullable<LegalModalType>, ModalContentItem> = {
+  privacy: {
+    title: "Privacy Policy",
+    subtitle: "Data ownership and privacy in Attendance Hub",
+    sections: [
+      {
+        heading: "Self-Hosted & Institution Owned",
+        body: "Attendance Hub is a self-hosted academic management platform. All student records, attendance histories, and course data are stored exclusively in your institution's dedicated Supabase PostgreSQL database.",
+      },
+      {
+        heading: "Local Storage & Offline First",
+        body: "To enable seamless offline attendance marking, records are stored locally in your browser's IndexedDB using Dexie.js. No institution data is ever transmitted to third-party telemetry, tracking, or analytics providers.",
+      },
+      {
+        heading: "Role-Based Data Isolation",
+        body: "Data access is enforced at the database level through PostgreSQL Row-Level Security (RLS) policies, ensuring users only view records permitted for their role (Super Admin, Department Admin, Teacher, or Class Representative).",
+      },
+    ],
+  },
+  terms: {
+    title: "Terms of Service",
+    subtitle: "Open-source software license & conditions",
+    sections: [
+      {
+        heading: "MIT License",
+        body: "Attendance Hub is open-source software released under the MIT License. You are free to use, modify, distribute, and self-host the software for educational, non-profit, or commercial institutional deployments.",
+      },
+      {
+        heading: "No Warranty",
+        body: "The software is provided 'as is', without warranty of any kind, express or implied. Your institution maintains full administrative control over your database instances, user permissions, and deployment environments.",
+      },
+      {
+        heading: "Institutional Responsibility",
+        body: "System administrators are responsible for configuring proper backups, maintaining server credentials (such as Supabase service-role keys), and securing user access.",
+      },
+    ],
+  },
+  cookies: {
+    title: "Cookie & Local Storage Policy",
+    subtitle: "How session state and offline data are maintained",
+    sections: [
+      {
+        heading: "Strictly Necessary Session Cookies",
+        body: "Attendance Hub uses HTTP-only authentication cookies (sb-*-auth-token) managed by @supabase/ssr to authenticate active user sessions securely.",
+      },
+      {
+        heading: "Local Browser Storage",
+        body: "Local storage is utilized solely to store user preferences (such as audio feedback settings) and client-side UI states. IndexedDB is used to cache offline attendance records.",
+      },
+      {
+        heading: "Zero Tracking Cookies",
+        body: "Attendance Hub uses no third-party marketing, tracking, advertising, or profiling cookies.",
+      },
+    ],
+  },
+  support: {
+    title: "Support & Documentation",
+    subtitle: "Deployment resources and issue tracking",
+    sections: [
+      {
+        heading: "Setup Documentation",
+        body: "Complete deployment guides, prerequisite specifications (Node.js 18.17+), and environment configuration instructions are documented in the project's README.",
+      },
+      {
+        heading: "Bug Reports & Feature Requests",
+        body: "Technical issues and contributions can be submitted directly to the project's GitHub repository issue tracker.",
+      },
+      {
+        heading: "Administrative Backups",
+        body: "Super Administrators can export full institutional snapshots (packaged as JSON in JSZip) and manage log retention policies via the dashboard /backup and /activity-logs pages.",
+      },
+    ],
+  },
+  contact: {
+    title: "Contact & Community",
+    subtitle: "Maintainers and open-source inquiries",
+    sections: [
+      {
+        heading: "Open-Source Community",
+        body: "Attendance Hub is developed and maintained by the open-source community. Engage via GitHub pull requests, discussions, and repository issues.",
+      },
+      {
+        heading: "Institutional Inquiries",
+        body: "For institutional onboarding or deployment questions, consult your campus IT department or reference the self-hosting guide in the repository documentation.",
+      },
+    ],
+  },
+  status: {
+    title: "System Status & Sync Health",
+    subtitle: "Monitoring connection and service availability",
+    sections: [
+      {
+        heading: "Connection & Offline Indicators",
+        body: "Attendance Hub includes real-time connection status monitoring. The navigation header displays live sync status (Synced, Pending, Failed) and informs users when working offline.",
+      },
+      {
+        heading: "Backend Availability",
+        body: "Service uptime is determined by your institution's Supabase PostgreSQL infrastructure and hosting platform (e.g. Vercel, Node.js runtime).",
+      },
+    ],
+  },
+};
+
 // Footer
 function Footer() {
+  const [modalType, setModalType] = useState<LegalModalType>(null);
+  const activeModalData = modalType ? LEGAL_MODAL_DATA[modalType] : null;
+
   return (
-    <footer className="bg-neutral-900 border-t border-neutral-800">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12 mb-12">
-          <div className="col-span-2 md:col-span-1">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center">
-                <GraduationCap className="w-5 h-5 text-neutral-900" />
+    <>
+      <footer className="bg-neutral-900 border-t border-neutral-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12 mb-12">
+            <div className="col-span-2 md:col-span-1">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center">
+                  <GraduationCap className="w-5 h-5 text-neutral-900" />
+                </div>
+                <span className="text-lg font-semibold text-white">Attendance Hub</span>
               </div>
-              <span className="text-lg font-semibold text-white">Attendance Hub</span>
+              <p className="text-neutral-400 text-sm leading-relaxed">
+                Modern attendance management for educational institutions worldwide.
+              </p>
             </div>
-            <p className="text-neutral-400 text-sm leading-relaxed">
-              Modern attendance management for educational institutions worldwide.
+
+            <div>
+              <h4 className="text-white font-semibold mb-4">Product</h4>
+              <ul className="space-y-3 text-sm">
+                <li><a href="#features" className="text-neutral-400 hover:text-white transition-colors">Features</a></li>
+                <li><a href="#how-it-works" className="text-neutral-400 hover:text-white transition-colors">How It Works</a></li>
+                <li><a href="#roles" className="text-neutral-400 hover:text-white transition-colors">For Teams</a></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="text-white font-semibold mb-4">Account</h4>
+              <ul className="space-y-3 text-sm">
+                <li><Link href="/login" className="text-neutral-400 hover:text-white transition-colors">Sign In</Link></li>
+                <li><Link href="/register" className="text-neutral-400 hover:text-white transition-colors">Get Started</Link></li>
+                <li><Link href="/forgot-password" className="text-neutral-400 hover:text-white transition-colors">Reset Password</Link></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="text-white font-semibold mb-4">Legal</h4>
+              <ul className="space-y-3 text-sm">
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setModalType('privacy')}
+                    className="text-neutral-400 hover:text-white transition-colors text-left"
+                  >
+                    Privacy Policy
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setModalType('terms')}
+                    className="text-neutral-400 hover:text-white transition-colors text-left"
+                  >
+                    Terms of Service
+                  </button>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => setModalType('cookies')}
+                    className="text-neutral-400 hover:text-white transition-colors text-left"
+                  >
+                    Cookie Policy
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="pt-8 border-t border-neutral-800 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <p className="text-neutral-500 text-sm">
+              2026 Attendance Hub. Distributed under the MIT License.
             </p>
-          </div>
-
-          <div>
-            <h4 className="text-white font-semibold mb-4">Product</h4>
-            <ul className="space-y-3 text-sm">
-              <li><a href="#features" className="text-neutral-400 hover:text-white transition-colors">Features</a></li>
-              <li><a href="#how-it-works" className="text-neutral-400 hover:text-white transition-colors">How It Works</a></li>
-              <li><a href="#roles" className="text-neutral-400 hover:text-white transition-colors">For Teams</a></li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-white font-semibold mb-4">Account</h4>
-            <ul className="space-y-3 text-sm">
-              <li><Link href="/login" className="text-neutral-400 hover:text-white transition-colors">Sign In</Link></li>
-              <li><Link href="/register" className="text-neutral-400 hover:text-white transition-colors">Get Started</Link></li>
-              <li><Link href="/forgot-password" className="text-neutral-400 hover:text-white transition-colors">Reset Password</Link></li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-white font-semibold mb-4">Legal</h4>
-            <ul className="space-y-3 text-sm">
-              <li><a href="#" className="text-neutral-400 hover:text-white transition-colors">Privacy Policy</a></li>
-              <li><a href="#" className="text-neutral-400 hover:text-white transition-colors">Terms of Service</a></li>
-              <li><a href="#" className="text-neutral-400 hover:text-white transition-colors">Cookie Policy</a></li>
-            </ul>
+            <div className="flex items-center gap-6">
+              <button
+                type="button"
+                onClick={() => setModalType('support')}
+                className="text-neutral-400 hover:text-white transition-colors text-sm"
+              >
+                Support
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalType('contact')}
+                className="text-neutral-400 hover:text-white transition-colors text-sm"
+              >
+                Contact
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalType('status')}
+                className="text-neutral-400 hover:text-white transition-colors text-sm"
+              >
+                Status
+              </button>
+            </div>
           </div>
         </div>
+      </footer>
 
-        <div className="pt-8 border-t border-neutral-800 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <p className="text-neutral-500 text-sm">
-            2026 Attendance Hub. All rights reserved.
-          </p>
-          <div className="flex items-center gap-6">
-            <a href="#" className="text-neutral-400 hover:text-white transition-colors text-sm">Support</a>
-            <a href="#" className="text-neutral-400 hover:text-white transition-colors text-sm">Contact</a>
-            <a href="#" className="text-neutral-400 hover:text-white transition-colors text-sm">Status</a>
-          </div>
-        </div>
-      </div>
-    </footer>
+      {activeModalData && (
+        <Dialog open={!!modalType} onOpenChange={(open) => !open && setModalType(null)}>
+          <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-neutral-900">
+                {activeModalData.title}
+              </DialogTitle>
+              <DialogDescription className="text-sm text-neutral-500">
+                {activeModalData.subtitle}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              {activeModalData.sections.map((section, idx) => (
+                <div key={idx} className="space-y-1">
+                  <h3 className="text-sm font-semibold text-neutral-900">
+                    {section.heading}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-neutral-600 leading-relaxed">
+                    {section.body}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" size="sm" />}>
+                Close
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   );
 }
 
