@@ -27,7 +27,7 @@ Source of truth for *how it's being fixed*: this file.
 | 17 | Medium Docs/UI-Text Contradictions | Complete | 2026-08-31 | e132374 |
 | 18 | Low Sweep — Lib Correctness | Complete | 2026-08-31 | 4865476 |
 | 19 | Low Sweep — Frontend UX/A11y Polish | Complete | 2026-08-31 | bca3ad1 |
-| 20 | Low Sweep — Ops/Tooling | Complete | 2026-08-31 |  |
+| 20 | Low Sweep — Ops/Tooling | Complete | 2026-08-31 | 43fa22d |
 | 21 | CI Foundation | Not started | | |
 | 22 | Low Sweep — Final Docs/Text | Not started | | |
 | 23 | Compressed Re-Audit | Not started | | |
@@ -978,7 +978,7 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Full verification result (Step 7)**: `pnpm run lint` EXIT=0 (0 warnings, 0 errors); `pnpm exec tsc --noEmit` EXIT=0 clean; `pnpm run test` EXIT=0 (40 test files / 312 tests passed); `pnpm run build` EXIT=0 (all 24 routes prerender clean).
 - **Interactions with prior fixes**: Reconciles F-028; validates Phase 8 CSV contracts and Phase 10 README claims.
 - **Residual risk / follow-ups**: None.
-- **Commit**: see tracker.
+- **Commit**: 43fa22d — fix(phase20): ops and tooling sweep — closes: Unused heavy dependencies, Baseline lint warnings (17) include a real exhaustive-deps issue
 
 ### [FIXED] Baseline lint warnings (17) include a real exhaustive-deps issue (F-030) & Ops/Tooling Sweep
 
@@ -1021,4 +1021,4 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
   - `pnpm run build` EXIT=0 (all 24 routes prerender clean).
 - **Interactions with prior fixes**: Reconciles F-030; preserves Phase 18 lib corrections, Phase 19 frontend UX improvements, and full TypeScript integrity.
 - **Residual risk / follow-ups**: None.
-- **Commit**: see tracker.
+- **Commit**: 43fa22d — fix(phase20): ops and tooling sweep — closes: Unused heavy dependencies, Baseline lint warnings (17) include a real exhaustive-deps issue
