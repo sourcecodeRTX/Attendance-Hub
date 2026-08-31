@@ -94,6 +94,8 @@ export async function wipeUniversityData(universityId: string): Promise<{ succes
   }
 }
 
+const CHUNK_SIZE = 200;
+
 // Internal helper for restoreUniversityData — intentionally NOT exported so it
 // is not reachable as a public server action.
 async function restoreAuthUsers(
@@ -125,7 +127,13 @@ async function restoreAuthUsers(
     }
 
     for (const u of users) {
-      if (u.role === 'super_admin') continue;
+      if (!u || typeof u !== 'object') continue;
+      if (u.role === 'super_admin') {
+        if (u.id && u.id !== currentUserId) {
+          idMapping[u.id] = currentUserId;
+        }
+        continue;
+      }
 
       let existing = existingPublicUsers?.find(
         (x: any) => x.email && u.email && x.email.toLowerCase() === String(u.email).toLowerCase()
@@ -181,6 +189,10 @@ export async function adminBulkUpsert(collection: string, payload: any[], univer
       throw new Error(`Invalid collection: ${collection}`);
     }
 
+    if (!payload || !Array.isArray(payload) || payload.length === 0) {
+      return { success: true };
+    }
+
     const guard = await requireUniversitySuperAdmin(universityId);
     if (!guard.ok) throw new Error(guard.error);
 
@@ -197,8 +209,11 @@ export async function adminBulkUpsert(collection: string, payload: any[], univer
       return { ...item, university_id: universityId };
     });
 
-    const { error } = await adminClient.from(collection).upsert(safePayload);
-    if (error) throw error;
+    for (let i = 0; i < safePayload.length; i += CHUNK_SIZE) {
+      const chunk = safePayload.slice(i, i + CHUNK_SIZE);
+      const { error } = await adminClient.from(collection).upsert(chunk);
+      if (error) throw error;
+    }
 
     return { success: true };
   } catch (error: any) {
@@ -213,14 +228,19 @@ export async function restoreUniversityData(
   data: any
 ): Promise<{ success: boolean; error?: string; credentials?: RestoredCredential[] }> {
   try {
+    if (!settings || typeof settings !== 'object' || !data || typeof data !== 'object') {
+      throw new Error('Invalid backup data structure: settings and data must be objects.');
+    }
+
     const guard = await requireUniversitySuperAdmin(universityId);
     if (!guard.ok) throw new Error(guard.error);
     const currentUserId = guard.userId;
 
     const adminClient = createAdminClient();
 
-    const filterByUni = (arr: any[]) => {
-      return (arr || []).filter(item => !item.universityId || item.universityId === universityId);
+    const filterByUni = (arr: any) => {
+      if (!Array.isArray(arr)) return [];
+      return arr.filter(item => item && typeof item === 'object' && (!item.universityId || item.universityId === universityId));
     };
 
     settings.users = filterByUni(settings.users);
@@ -229,6 +249,7 @@ export async function restoreUniversityData(
     // Check for duplicate departments by code
     const uniqueDeptsMap = new Map();
     for (const d of filterByUni(settings.departments)) {
+      if (!d.code || typeof d.code !== 'string') continue;
       if (uniqueDeptsMap.has(d.code)) {
         throw new Error(`Duplicate department code found in backup: "${d.code}". Please remove or fix the duplicate department in the settings JSON file before importing.`);
       }
@@ -244,6 +265,7 @@ export async function restoreUniversityData(
     // Check for duplicate students by sectionId and rollNumber
     const uniqueStudentsMap = new Map();
     for (const s of filterByUni(data.students)) {
+      if (!s.sectionId || !s.rollNumber) continue;
       const key = `${s.sectionId}-${s.rollNumber}`;
       if (uniqueStudentsMap.has(key)) {
         throw new Error(`Duplicate student roll number found in backup data: Roll Number "${s.rollNumber}" in Section ID "${s.sectionId}". Please remove the duplicate student from the data JSON file before importing.`);
@@ -254,7 +276,9 @@ export async function restoreUniversityData(
 
     // subject_sections don't have universityId, so filter them based on valid subjectIds
     const validSubjectIds = new Set(settings.subjects.map((s: any) => s.id));
-    data.subjectSections = (data.subjectSections || []).filter((ss: any) => validSubjectIds.has(ss.subjectId));
+    data.subjectSections = (Array.isArray(data.subjectSections) ? data.subjectSections : []).filter(
+      (ss: any) => ss && typeof ss === 'object' && validSubjectIds.has(ss.subjectId)
+    );
 
     data.userSections = filterByUni(data.userSections);
     data.userSubjects = filterByUni(data.userSubjects);
@@ -267,6 +291,7 @@ export async function restoreUniversityData(
     const duplicateIdMapping: Record<string, string> = {};
 
     for (const u of rawUsers) {
+      if (!u || typeof u !== 'object' || !u.id) continue;
       const key = u.staffId || u.email;
       if (key && uniqueUsersMap.has(key)) {
          const kept = uniqueUsersMap.get(key);
@@ -296,7 +321,7 @@ export async function restoreUniversityData(
         for (let i = 0; i < obj.length; i++) {
           if (typeof obj[i] === 'string' && mapping[obj[i]]) {
             obj[i] = mapping[obj[i]];
-          } else if (typeof obj[i] === 'object') {
+          } else if (typeof obj[i] === 'object' && obj[i] !== null) {
             replaceIds(obj[i]);
           }
         }
@@ -304,7 +329,7 @@ export async function restoreUniversityData(
         for (const key of Object.keys(obj)) {
           if (typeof obj[key] === 'string' && mapping[obj[key]]) {
             obj[key] = mapping[obj[key]];
-          } else if (typeof obj[key] === 'object') {
+          } else if (typeof obj[key] === 'object' && obj[key] !== null) {
             replaceIds(obj[key]);
           }
         }
@@ -318,6 +343,7 @@ export async function restoreUniversityData(
 
     // Prepare helper to map rows
     const mapRemoteToLocalFormat = (collection: string, row: any) => {
+      if (!row || typeof row !== 'object') return row;
       const base: any = { id: row.id };
       switch (collection) {
         case 'departments':
@@ -341,14 +367,30 @@ export async function restoreUniversityData(
         case 'user_subjects':
           return { ...base, university_id: row.universityId, user_id: row.userId, subject_id: row.subjectId, section_id: row.sectionId, assigned_at: row.assignedAt, assigned_by: row.assignedBy };
         case 'attendance_sessions':
-          return { ...base, university_id: row.universityId, department_id: row.departmentId, section_id: row.sectionId, subject_id: row.subjectId, date: row.date, period_number: row.periodNumber, period_label: row.periodLabel, records: row.records, locked_by_teacher: row.lockedByTeacher, is_archived: row.isArchived, created_by: row.createdBy, last_modified_by: row.lastModifiedBy, created_at: row.createdAt };
+          return {
+            ...base,
+            university_id: row.universityId,
+            department_id: row.departmentId,
+            section_id: row.sectionId,
+            subject_id: row.subjectId,
+            date: row.date,
+            period_number: row.periodNumber,
+            period_label: row.periodLabel,
+            records: row.records,
+            locked_by_teacher: row.lockedByTeacher,
+            is_archived: row.isArchived,
+            created_by: row.createdBy,
+            last_modified_by: row.lastModifiedBy,
+            created_at: row.createdAt,
+            revision: typeof row.revision === 'number' ? row.revision : 1,
+          };
         default:
           return row;
       }
     };
 
     // Prepare mapped payloads
-    const mappedUsers = (settings.users || []).filter((u: any) => u.role !== 'super_admin').map((r: any) => mapRemoteToLocalFormat('users', r));
+    const mappedUsers = (settings.users || []).filter((u: any) => u && u.role !== 'super_admin').map((r: any) => mapRemoteToLocalFormat('users', r));
     const mappedDepartments = (settings.departments || []).map((r: any) => mapRemoteToLocalFormat('departments', r));
     const mappedBranches = (settings.branches || []).map((r: any) => mapRemoteToLocalFormat('branches', r));
     const mappedSpecialisations = (settings.specialisations || []).map((r: any) => mapRemoteToLocalFormat('specialisations', r));
@@ -366,14 +408,18 @@ export async function restoreUniversityData(
       return payload.map(item => ({ ...item, university_id: universityId }));
     };
 
-    // Helper for upserting
+    // Helper for upserting in bounded chunks
     const doUpsert = async (collection: string, payload: any[], skipUniId: boolean = false) => {
       if (!payload || payload.length === 0) return;
       const safePayload = forceUniversityId(payload, skipUniId);
-      const { error } = await adminClient.from(collection).upsert(safePayload);
-      if (error) {
-         console.error(`Failed to upsert ${collection}:`, error);
-         throw new Error(`Failed to restore ${collection}: ${error.message}`);
+      
+      for (let i = 0; i < safePayload.length; i += CHUNK_SIZE) {
+        const chunk = safePayload.slice(i, i + CHUNK_SIZE);
+        const { error } = await adminClient.from(collection).upsert(chunk);
+        if (error) {
+          console.error(`Failed to upsert ${collection} (chunk ${Math.floor(i / CHUNK_SIZE) + 1}):`, error);
+          throw new Error(`Failed to restore ${collection}: ${error.message}`);
+        }
       }
     };
 
@@ -381,7 +427,7 @@ export async function restoreUniversityData(
     // which happens if multiple original users map to the same existing auth user ID.
     const uniqueMappedUsers = new Map();
     for (const u of mappedUsers) {
-      if (u.id) uniqueMappedUsers.set(u.id, u);
+      if (u && u.id) uniqueMappedUsers.set(u.id, u);
     }
     // Accounts freshly created by this restore received a random one-time
     // password nobody knows; force a password change at first login.
@@ -389,6 +435,62 @@ export async function restoreUniversityData(
     const finalMappedUsers = Array.from(uniqueMappedUsers.values()).map(u =>
       createdIdSet.has(u.id) ? { ...u, must_change_password: true } : u
     );
+
+    // Sanitize dangling admin_id in departments and primary_teacher_id in sections
+    const validUserIds = new Set<string>([
+      currentUserId,
+      ...finalMappedUsers.map((u: any) => u.id).filter(Boolean),
+    ]);
+    for (const d of mappedDepartments) {
+      if (d && d.admin_id && !validUserIds.has(d.admin_id)) {
+        d.admin_id = null;
+      }
+    }
+    for (const s of mappedSections) {
+      if (s && s.primary_teacher_id && !validUserIds.has(s.primary_teacher_id)) {
+        s.primary_teacher_id = null;
+      }
+    }
+
+    // Deduplicate junction tables post-ID-remapping to prevent PostgREST conflict errors
+    const uniqueSubjectSectionsMap = new Map<string, any>();
+    for (const ss of mappedSubjectSections) {
+      if (!ss || !ss.subject_id || !ss.section_id) continue;
+      uniqueSubjectSectionsMap.set(`${ss.subject_id}-${ss.section_id}`, ss);
+    }
+    const finalSubjectSections = Array.from(uniqueSubjectSectionsMap.values());
+
+    const uniqueUserSectionsMap = new Map<string, any>();
+    for (const us of mappedUserSections) {
+      if (!us || !us.user_id || !us.section_id) continue;
+      uniqueUserSectionsMap.set(`${us.user_id}-${us.section_id}`, us);
+    }
+    const finalUserSections = Array.from(uniqueUserSectionsMap.values());
+
+    const uniqueUserSubjectsMap = new Map<string, any>();
+    for (const us of mappedUserSubjects) {
+      if (!us || !us.user_id || !us.subject_id || !us.section_id) continue;
+      uniqueUserSubjectsMap.set(`${us.user_id}-${us.subject_id}-${us.section_id}`, us);
+    }
+    const finalUserSubjects = Array.from(uniqueUserSubjectsMap.values());
+
+    // Deduplicate attendance sessions by ID and enforce unique (subject_id, date, period_number)
+    const uniqueAttendanceMap = new Map<string, any>();
+    const seenPeriods = new Set<string>();
+    for (const a of mappedAttendance) {
+      if (!a || !a.id) continue;
+      if (a.subject_id && a.date && a.period_number !== undefined) {
+        const periodKey = `${a.subject_id}_${a.date}_${a.period_number}`;
+        if (seenPeriods.has(periodKey)) {
+          throw new Error(
+            `Duplicate attendance session found in backup: Subject "${a.subject_id}", Date "${a.date}", Period ${a.period_number}. Please remove duplicate sessions before restoring.`
+          );
+        }
+        seenPeriods.add(periodKey);
+      }
+      uniqueAttendanceMap.set(a.id, a);
+    }
+    const finalAttendance = Array.from(uniqueAttendanceMap.values());
 
     // Break circular dependency: Users <-> Departments
     // Step 1: Upsert users with department_id = NULL
@@ -415,10 +517,10 @@ export async function restoreUniversityData(
     await doUpsert('students', mappedStudents);
 
     // Many-to-many junction tables and attendance
-    await doUpsert('subject_sections', mappedSubjectSections, true);
-    await doUpsert('user_sections', mappedUserSections);
-    await doUpsert('user_subjects', mappedUserSubjects);
-    await doUpsert('attendance_sessions', mappedAttendance);
+    await doUpsert('subject_sections', finalSubjectSections, true);
+    await doUpsert('user_sections', finalUserSections);
+    await doUpsert('user_subjects', finalUserSubjects);
+    await doUpsert('attendance_sessions', finalAttendance);
 
     return { success: true, credentials: restoreRes.credentials || [] };
   } catch (error: any) {

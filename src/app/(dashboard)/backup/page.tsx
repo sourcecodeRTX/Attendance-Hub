@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { db } from '@/lib/db';
 import { clearSyncQueue } from '@/lib/db/sync';
+import { getLocalDateString } from '@/lib/utils/date';
 import { wipeUniversityData, restoreUniversityData } from './actions';
 import {
   Card,
@@ -35,7 +36,7 @@ import { Loader2, DatabaseBackup, Trash2, UploadCloud, Download, AlertTriangle }
 import JSZip from 'jszip';
 
 export default function BackupPage() {
-  const { user, university, clearAuth } = useAuthStore();
+  const { user, university } = useAuthStore();
   const [isExporting, setIsExporting] = useState(false);
   const [isWiping, setIsWiping] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -59,8 +60,8 @@ export default function BackupPage() {
     setIsExporting(true);
     try {
       const [
-        users, departments, branches, specialisations, subjects, sections,
-        students, subjectSections, attendanceSessions, userSections, userSubjects
+        rawUsers, rawDepartments, rawBranches, rawSpecialisations, rawSubjects, rawSections,
+        rawStudents, rawSubjectSections, rawAttendanceSessions, rawUserSections, rawUserSubjects
       ] = await Promise.all([
         db.users.toArray(),
         db.departments.toArray(),
@@ -74,6 +75,25 @@ export default function BackupPage() {
         db.userSections.toArray(),
         db.userSubjects.toArray(),
       ]);
+
+      const filterByUni = <T extends { universityId?: string }>(arr: T[]) => {
+        return (arr || []).filter(item => !item.universityId || item.universityId === university?.id);
+      };
+
+      const users = filterByUni(rawUsers);
+      const departments = filterByUni(rawDepartments);
+      const branches = filterByUni(rawBranches);
+      const specialisations = filterByUni(rawSpecialisations);
+      const subjects = filterByUni(rawSubjects);
+      const sections = filterByUni(rawSections);
+
+      const subjectIdSet = new Set(subjects.map(s => s.id));
+      const subjectSections = (rawSubjectSections || []).filter(ss => subjectIdSet.has(ss.subjectId));
+
+      const students = filterByUni(rawStudents);
+      const attendanceSessions = filterByUni(rawAttendanceSessions);
+      const userSections = filterByUni(rawUserSections);
+      const userSubjects = filterByUni(rawUserSubjects);
 
       const settingsData = {
         users, departments, branches, specialisations, subjects, sections
@@ -91,7 +111,7 @@ export default function BackupPage() {
       const url = URL.createObjectURL(content);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Backup_${university?.name || 'Data'}_${new Date().toISOString().split('T')[0]}.zip`;
+      link.download = `Backup_${university?.name || 'Data'}_${getLocalDateString()}.zip`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -139,6 +159,7 @@ export default function BackupPage() {
           db.attendanceSessions.clear(),
           db.userSections.clear(),
           db.userSubjects.clear(),
+          db.cachedAnalytics.clear(),
         ]);
         await clearSyncQueue();
       } catch (localError) {
@@ -184,12 +205,12 @@ export default function BackupPage() {
       try {
         settings = JSON.parse(settingsStr);
         data = JSON.parse(dataStr);
-      } catch (err) {
+      } catch {
         throw new Error('Invalid JSON format. Please ensure files are not corrupted.');
       }
 
       // 3. Basic validation to prevent arbitrary injection
-      if (typeof settings !== 'object' || typeof data !== 'object') {
+      if (!settings || typeof settings !== 'object' || !data || typeof data !== 'object') {
         throw new Error('Invalid data structure in backup files.');
       }
 
@@ -206,13 +227,31 @@ export default function BackupPage() {
       await db.transaction('rw', 
         [db.users, db.departments, db.branches, db.specialisations, db.subjects, db.sections,
         db.students, db.subjectSections, db.attendanceSessions, db.userSections, db.userSubjects,
-        db.syncQueue],
+        db.cachedAnalytics, db.syncQueue],
         async () => {
           const filterByUni = (arr: any[]) => {
             return (arr || []).filter(item => !item.universityId || item.universityId === university?.id);
           };
 
-          // Put the data locally
+          // Clear old local records to prevent stale ghost rows from pre-import state
+          if (user) {
+            await db.users.where('id').notEqual(user.id).delete();
+          } else {
+            await db.users.clear();
+          }
+          await db.departments.clear();
+          await db.branches.clear();
+          await db.specialisations.clear();
+          await db.subjects.clear();
+          await db.sections.clear();
+          await db.students.clear();
+          await db.subjectSections.clear();
+          await db.attendanceSessions.clear();
+          await db.userSections.clear();
+          await db.userSubjects.clear();
+          await db.cachedAnalytics.clear();
+
+          // Put the restored data locally
           if (settings.users) await db.users.bulkPut(filterByUni(settings.users));
           if (settings.departments) await db.departments.bulkPut(filterByUni(settings.departments));
           if (settings.branches) await db.branches.bulkPut(filterByUni(settings.branches));

@@ -6,7 +6,7 @@ const h = vi.hoisted(() => ({
   deletes: [] as Array<{ table: string; ops: string[] }>,
   deletedAuthIds: [] as string[],
   createdAuthUsers: [] as any[],
-  selectResolver: ((table: string) => ({ data: [], error: null })) as any,
+  selectResolver: ((_table: string) => ({ data: [], error: null })) as any,
 }));
 
 vi.mock('@/lib/supabase/server-auth', () => ({
@@ -148,6 +148,22 @@ describe('adminBulkUpsert authorization + collection whitelist (F-002)', () => {
     expect(res.success).toBe(true);
     expect(h.upserts[0].payload[0]).toEqual({ subject_id: 'sub1', section_id: 'sec1' });
   });
+
+  it('chunks payloads larger than 200 rows into multiple batches', async () => {
+    const largePayload = Array.from({ length: 450 }, (_, i) => ({
+      id: `s-${i}`,
+      full_name: `Student ${i}`,
+    }));
+
+    const res = await adminBulkUpsert('students', largePayload, 'uni-1');
+
+    expect(res.success).toBe(true);
+    const studentUpserts = h.upserts.filter((u) => u.table === 'students');
+    expect(studentUpserts).toHaveLength(3);
+    expect(studentUpserts[0].payload).toHaveLength(200);
+    expect(studentUpserts[1].payload).toHaveLength(200);
+    expect(studentUpserts[2].payload).toHaveLength(50);
+  });
 });
 
 describe('restoreUniversityData authorization (F-002)', () => {
@@ -163,6 +179,16 @@ describe('restoreUniversityData authorization (F-002)', () => {
     expect(res.success).toBe(false);
     expect(h.upserts).toHaveLength(0);
     expect(h.createdAuthUsers).toHaveLength(0);
+  });
+
+  it('rejects non-object or null settings/data payloads', async () => {
+    const res1 = await restoreUniversityData('uni-1', null, {});
+    expect(res1.success).toBe(false);
+    expect(res1.error).toContain('settings and data must be objects');
+
+    const res2 = await restoreUniversityData('uni-1', {}, null);
+    expect(res2.success).toBe(false);
+    expect(res2.error).toContain('settings and data must be objects');
   });
 });
 
@@ -293,4 +319,129 @@ describe('restore auth-user lifecycle (F-007, F-008)', () => {
     // listUsers throws if invoked, so reaching here means it was never called.
     expect(h.createdAuthUsers.map((c) => c.email)).toEqual(['x@uni.com']);
   });
+
+  it('remaps backup super_admin ID to the current active super_admin userId across relations', async () => {
+    h.selectResolver = () => ({ data: [], error: null });
+
+    const settings = {
+      ...emptySettings(),
+      users: [
+        { id: 'old-sa-id', role: 'super_admin', email: 'admin@uni.com', fullName: 'Old SA' },
+        { id: 't-1', role: 'regular_teacher', email: 't1@uni.com', fullName: 'Teacher 1' },
+      ],
+      departments: [
+        { id: 'dept-1', name: 'CS', code: 'CS', createdBy: 'old-sa-id', universityId: 'uni-1' },
+      ],
+      sections: [
+        { id: 'sec-1', name: 'A', departmentId: 'dept-1', createdBy: 'old-sa-id', universityId: 'uni-1' },
+      ],
+    };
+
+    const res = await restoreUniversityData('uni-1', settings, {});
+    expect(res.success).toBe(true);
+
+    const deptsUpsert = h.upserts.find((u) => u.table === 'departments');
+    expect(deptsUpsert).toBeDefined();
+    expect(deptsUpsert!.payload[0].created_by).toBe('caller-1'); // remapped to active session super_admin
+
+    const secsUpsert = h.upserts.find((u) => u.table === 'sections');
+    expect(secsUpsert).toBeDefined();
+    expect(secsUpsert!.payload[0].created_by).toBe('caller-1');
+  });
+
+  it('sanitizes dangling admin_id and primary_teacher_id to null when users do not exist', async () => {
+    h.selectResolver = () => ({ data: [], error: null });
+
+    const settings = {
+      ...emptySettings(),
+      users: [],
+      departments: [
+        { id: 'dept-1', name: 'CS', code: 'CS', adminId: 'ghost-user', universityId: 'uni-1' },
+      ],
+      sections: [
+        { id: 'sec-1', name: 'A', departmentId: 'dept-1', primaryTeacherId: 'nonexistent-user', universityId: 'uni-1' },
+      ],
+    };
+
+    const res = await restoreUniversityData('uni-1', settings, {});
+    expect(res.success).toBe(true);
+
+    const deptsUpsert = h.upserts.find((u) => u.table === 'departments');
+    expect(deptsUpsert!.payload[0].admin_id).toBeNull();
+
+    const secsUpsert = h.upserts.find((u) => u.table === 'sections');
+    expect(secsUpsert!.payload[0].primary_teacher_id).toBeNull();
+  });
+
+  it('deduplicates user_sections and user_subjects after ID remapping', async () => {
+    // Both bu-1 and bu-2 match the existing user ex-1
+    h.selectResolver = (table: string) => {
+      if (table === 'users') return { data: [{ id: 'ex-1', email: 'same@uni.com' }], error: null };
+      return { data: [], error: null };
+    };
+
+    const settings = {
+      ...emptySettings(),
+      users: [
+        { id: 'bu-1', role: 'regular_teacher', email: 'same@uni.com' },
+        { id: 'bu-2', role: 'regular_teacher', email: 'same@uni.com' },
+      ],
+    };
+
+    const data = {
+      userSections: [
+        { id: 'us-1', userId: 'bu-1', sectionId: 'sec-1', userRole: 'teacher', universityId: 'uni-1' },
+        { id: 'us-2', userId: 'bu-2', sectionId: 'sec-1', userRole: 'teacher', universityId: 'uni-1' },
+      ],
+      userSubjects: [
+        { id: 'sub-1', userId: 'bu-1', subjectId: 'sub-1', sectionId: 'sec-1', universityId: 'uni-1' },
+        { id: 'sub-2', userId: 'bu-2', subjectId: 'sub-1', sectionId: 'sec-1', universityId: 'uni-1' },
+      ],
+    };
+
+    const res = await restoreUniversityData('uni-1', settings, data);
+    expect(res.success).toBe(true);
+
+    const userSectionsUpsert = h.upserts.find((u) => u.table === 'user_sections');
+    expect(userSectionsUpsert!.payload).toHaveLength(1);
+    expect(userSectionsUpsert!.payload[0].user_id).toBe('ex-1');
+
+    const userSubjectsUpsert = h.upserts.find((u) => u.table === 'user_subjects');
+    expect(userSubjectsUpsert!.payload).toHaveLength(1);
+    expect(userSubjectsUpsert!.payload[0].user_id).toBe('ex-1');
+  });
+
+  it('rejects duplicate attendance sessions with identical (subject_id, date, period_number)', async () => {
+    h.selectResolver = () => ({ data: [], error: null });
+
+    const settings = emptySettings();
+    const data = {
+      attendanceSessions: [
+        { id: 'sess-1', subjectId: 'sub-1', date: '2026-08-31', periodNumber: 1, universityId: 'uni-1' },
+        { id: 'sess-2', subjectId: 'sub-1', date: '2026-08-31', periodNumber: 1, universityId: 'uni-1' },
+      ],
+    };
+
+    const res = await restoreUniversityData('uni-1', settings, data);
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('Duplicate attendance session found in backup');
+  });
+
+  it('preserves revision field on attendance sessions', async () => {
+    h.selectResolver = () => ({ data: [], error: null });
+
+    const settings = emptySettings();
+    const data = {
+      attendanceSessions: [
+        { id: 'sess-1', subjectId: 'sub-1', date: '2026-08-31', periodNumber: 1, revision: 7, universityId: 'uni-1' },
+      ],
+    };
+
+    const res = await restoreUniversityData('uni-1', settings, data);
+    expect(res.success).toBe(true);
+
+    const attUpsert = h.upserts.find((u) => u.table === 'attendance_sessions');
+    expect(attUpsert!.payload[0].revision).toBe(7);
+  });
 });
+

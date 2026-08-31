@@ -67,12 +67,10 @@ export async function getActivityLogs(
   if (options?.departmentId) {
     query = query.eq('department_id', options.departmentId);
   }
-  if (options?.limit) {
-    query = query.limit(options.limit);
-  }
-  if (options?.offset) {
-    query = query.range(options.offset, options.offset + (options?.limit || 50) - 1);
-  }
+  
+  const limit = options?.limit ?? 50;
+  const offset = options?.offset ?? 0;
+  query = query.range(offset, offset + limit - 1);
 
   const { data, error } = await query;
   if (error) throw error;
@@ -117,15 +115,19 @@ export function getStartOfCurrentWeek(): Date {
 export function wasCleanupRunThisWeek(universityId: string): boolean {
   if (typeof window === 'undefined') return false;
   
-  const storageKey = `${CLEANUP_STORAGE_KEY_PREFIX}${universityId}`;
-  const lastCleanup = localStorage.getItem(storageKey);
-  
-  if (!lastCleanup) return false;
-  
-  const lastCleanupDate = new Date(lastCleanup);
-  const startOfWeek = getStartOfCurrentWeek();
-  
-  return lastCleanupDate >= startOfWeek;
+  try {
+    const storageKey = `${CLEANUP_STORAGE_KEY_PREFIX}${universityId}`;
+    const lastCleanup = localStorage.getItem(storageKey);
+    
+    if (!lastCleanup) return false;
+    
+    const lastCleanupDate = new Date(lastCleanup);
+    const startOfWeek = getStartOfCurrentWeek();
+    
+    return lastCleanupDate >= startOfWeek;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -134,8 +136,12 @@ export function wasCleanupRunThisWeek(universityId: string): boolean {
 export function recordCleanupRun(universityId: string): void {
   if (typeof window === 'undefined') return;
   
-  const storageKey = `${CLEANUP_STORAGE_KEY_PREFIX}${universityId}`;
-  localStorage.setItem(storageKey, new Date().toISOString());
+  try {
+    const storageKey = `${CLEANUP_STORAGE_KEY_PREFIX}${universityId}`;
+    localStorage.setItem(storageKey, new Date().toISOString());
+  } catch {
+    // Ignore storage quota or security errors in restricted environments
+  }
 }
 
 /**
@@ -144,10 +150,14 @@ export function recordCleanupRun(universityId: string): void {
 export function getLastCleanupTime(universityId: string): Date | null {
   if (typeof window === 'undefined') return null;
   
-  const storageKey = `${CLEANUP_STORAGE_KEY_PREFIX}${universityId}`;
-  const lastCleanup = localStorage.getItem(storageKey);
-  
-  return lastCleanup ? new Date(lastCleanup) : null;
+  try {
+    const storageKey = `${CLEANUP_STORAGE_KEY_PREFIX}${universityId}`;
+    const lastCleanup = localStorage.getItem(storageKey);
+    
+    return lastCleanup ? new Date(lastCleanup) : null;
+  } catch {
+    return null;
+  }
 }
 
 interface DeleteOldLogsResult {
@@ -180,21 +190,10 @@ export async function deleteOldActivityLogs(
   const startOfWeek = getStartOfCurrentWeek();
 
   try {
-    // First, count how many logs will be deleted
-    const { count, error: countError } = await supabase
+    // Delete old logs with atomic exact count
+    const { count, error: deleteError } = await supabase
       .from('activity_logs')
-      .select('*', { count: 'exact', head: true })
-      .eq('university_id', universityId)
-      .lt('created_at', startOfWeek.toISOString());
-
-    if (countError) {
-      throw countError;
-    }
-
-    // Delete old logs
-    const { error: deleteError } = await supabase
-      .from('activity_logs')
-      .delete()
+      .delete({ count: 'exact' })
       .eq('university_id', universityId)
       .lt('created_at', startOfWeek.toISOString());
 
@@ -207,7 +206,7 @@ export async function deleteOldActivityLogs(
 
     return {
       success: true,
-      deletedCount: count || 0,
+      deletedCount: typeof count === 'number' ? count : 0,
     };
   } catch (error) {
     console.error('Failed to delete old activity logs:', error);
@@ -273,14 +272,26 @@ interface SaveLogSettingsInput {
  */
 export async function saveLogSettings(input: SaveLogSettingsInput): Promise<{ success: boolean; error?: string }> {
   const supabase = createClient();
+
+  const autoDeleteEnabled = Boolean(input.autoDeleteEnabled);
+  let retentionDays: number | null = null;
+  if (autoDeleteEnabled) {
+    if (typeof input.retentionDays !== 'number' || !Number.isFinite(input.retentionDays) || input.retentionDays <= 0) {
+      return {
+        success: false,
+        error: 'Retention days must be a positive number when auto-delete is enabled.',
+      };
+    }
+    retentionDays = Math.floor(input.retentionDays);
+  }
   
   try {
     const { error } = await supabase
       .from('log_settings')
       .upsert({
         university_id: input.universityId,
-        auto_delete_enabled: input.autoDeleteEnabled,
-        retention_days: input.retentionDays,
+        auto_delete_enabled: autoDeleteEnabled,
+        retention_days: retentionDays,
         updated_at: new Date().toISOString(),
         updated_by: input.updatedBy,
       }, {
@@ -381,13 +392,10 @@ export async function deleteLogsByAge(
   const supabase = createClient();
   
   try {
-    // First count how many will be deleted
-    const count = await countLogsToDelete(universityId, timeframe);
-    
-    // Build delete query
+    // Build delete query with count: 'exact'
     let query = supabase
       .from('activity_logs')
-      .delete()
+      .delete({ count: 'exact' })
       .eq('university_id', universityId);
     
     if (timeframe !== 'all') {
@@ -395,13 +403,13 @@ export async function deleteLogsByAge(
       query = query.lt('created_at', cutoff.toISOString());
     }
     
-    const { error } = await query;
+    const { count, error } = await query;
     
     if (error) throw error;
     
     return {
       success: true,
-      deletedCount: count,
+      deletedCount: typeof count === 'number' ? count : 0,
     };
   } catch (error) {
     console.error('Failed to delete logs:', error);
@@ -420,6 +428,14 @@ export async function deleteLogsOlderThanDays(
   universityId: string,
   days: number
 ): Promise<DeleteLogsResult> {
+  if (typeof days !== 'number' || !Number.isFinite(days) || days <= 0) {
+    return {
+      success: false,
+      deletedCount: 0,
+      error: 'Invalid retention days parameter',
+    };
+  }
+
   const supabase = createClient();
   
   const cutoff = new Date();
@@ -427,19 +443,9 @@ export async function deleteLogsOlderThanDays(
   cutoff.setHours(0, 0, 0, 0);
   
   try {
-    // First count how many will be deleted
-    const { count, error: countError } = await supabase
+    const { count, error } = await supabase
       .from('activity_logs')
-      .select('*', { count: 'exact', head: true })
-      .eq('university_id', universityId)
-      .lt('created_at', cutoff.toISOString());
-    
-    if (countError) throw countError;
-    
-    // Delete
-    const { error } = await supabase
-      .from('activity_logs')
-      .delete()
+      .delete({ count: 'exact' })
       .eq('university_id', universityId)
       .lt('created_at', cutoff.toISOString());
     
@@ -447,7 +453,7 @@ export async function deleteLogsOlderThanDays(
     
     return {
       success: true,
-      deletedCount: count || 0,
+      deletedCount: typeof count === 'number' ? count : 0,
     };
   } catch (error) {
     console.error('Failed to delete logs:', error);
@@ -469,7 +475,12 @@ export async function runAutoCleanupIfEnabled(
   const settings = await getLogSettings(universityId);
   
   // If no settings or auto-delete is disabled, do nothing
-  if (!settings || !settings.autoDeleteEnabled || !settings.retentionDays) {
+  if (
+    !settings ||
+    !settings.autoDeleteEnabled ||
+    typeof settings.retentionDays !== 'number' ||
+    settings.retentionDays <= 0
+  ) {
     return null;
   }
   
