@@ -25,7 +25,7 @@ Source of truth for *how it's being fixed*: this file.
 | 15 | Backup/Restore & Activity-Log Correctness | Complete | 2026-08-31 | 87a9922 |
 | 16 | Test-Quality Fixes | Complete | 2026-08-31 | c1142ca |
 | 17 | Medium Docs/UI-Text Contradictions | Complete | 2026-08-31 | e132374 |
-| 18 | Low Sweep — Lib Correctness | Complete | 2026-08-31 | |
+| 18 | Low Sweep — Lib Correctness | Complete | 2026-08-31 | 4865476 |
 | 19 | Low Sweep — Frontend UX/A11y Polish | Not started | | |
 | 20 | Low Sweep — Ops/Tooling | Not started | | |
 | 21 | CI Foundation | Not started | | |
