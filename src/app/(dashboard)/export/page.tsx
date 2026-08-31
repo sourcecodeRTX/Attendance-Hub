@@ -6,7 +6,7 @@ import { getDepartments, getSections, getBranches } from '@/lib/db/university';
 import { getStudents } from '@/lib/db/students';
 import { getSubjects } from '@/lib/db/subjects';
 import { getAttendanceSessions } from '@/lib/db/attendance';
-import { getUserSections, getPrimarySectionId } from '@/lib/db/user-sections';
+import { getPrimarySectionId } from '@/lib/db/user-sections';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

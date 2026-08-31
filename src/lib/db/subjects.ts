@@ -115,9 +115,6 @@ export async function createSubject(
 
 export async function deleteSubject(subjectId: string, universityId: string, userId: string): Promise<void> {
   await db.transaction('rw', [db.subjects, db.subjectSections, db.attendanceSessions, db.userSubjects, db.syncQueue], async () => {
-    // Get all subject_sections for deletion
-    const subjectSecs = await db.subjectSections.where('subjectId').equals(subjectId).toArray();
-    
     // Delete local data
     await db.attendanceSessions.where('subjectId').equals(subjectId).delete();
     await db.userSubjects.where('subjectId').equals(subjectId).delete();

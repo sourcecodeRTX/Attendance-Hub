@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuthStore } from '@/lib/stores/auth-store';
-import { getSubjects, createSubject, deleteSubject, updateSubject } from '@/lib/db/subjects';
-import { getUserSections } from '@/lib/db/user-sections';
+import { createSubject, deleteSubject, updateSubject } from '@/lib/db/subjects';
 import { logActivity } from '@/lib/db/activity';
 import { db } from '@/lib/db/index';
 import { applyRemoteChange } from '@/lib/db/sync';

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
@@ -12,9 +12,7 @@ import {
   getSections,
   createSection,
   deleteSection,
-  updateSection,
 } from '@/lib/db/university';
-import { createUserSection, deleteUserSectionsByUser } from '@/lib/db/user-sections';
 import { logActivity } from '@/lib/db/activity';
 import { db } from '@/lib/db';
 import { sectionSchema, type SectionInput } from '@/lib/utils/validation';

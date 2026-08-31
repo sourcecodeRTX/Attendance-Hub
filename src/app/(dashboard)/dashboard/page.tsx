@@ -16,7 +16,7 @@ import { getDepartments, getSections } from '@/lib/db/university';
 import { getStudents } from '@/lib/db/students';
 import { getSubjects } from '@/lib/db/subjects';
 import { getAttendanceSessions } from '@/lib/db/attendance';
-import { getUserSections, getUserSubjects, getPrimarySectionId } from '@/lib/db/user-sections';
+import { getUserSubjects, getPrimarySectionId } from '@/lib/db/user-sections';
 import { getActivityLogs } from '@/lib/db/activity';
 import { useLocalDateString } from '@/hooks/use-local-date';
 import { computeCRSectionStats } from '@/lib/utils/cr-metrics';

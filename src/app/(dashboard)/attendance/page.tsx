@@ -27,7 +27,6 @@ import type {
   AttendanceMarker,
   Subject,
   Student,
-  UserSubject,
 } from '@/lib/types';
 
 import { Button } from '@/components/ui/button';

@@ -24,48 +24,29 @@ import {
 } from "lucide-react";
 
 // Intersection Observer hook for scroll animations
-function useInView(options = {}) {
+function useInView(options: IntersectionObserverInit = {}) {
   const ref = useRef<HTMLDivElement>(null);
   const [isInView, setIsInView] = useState(false);
+  const { threshold = 0.1, root, rootMargin } = options;
 
   useEffect(() => {
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        setIsInView(true);
-      }
-    }, { threshold: 0.1, ...options });
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsInView(true);
+        }
+      },
+      { threshold, root, rootMargin }
+    );
 
     if (ref.current) {
       observer.observe(ref.current);
     }
 
     return () => observer.disconnect();
-  }, []);
+  }, [threshold, root, rootMargin]);
 
   return { ref, isInView };
-}
-
-// Animated counter component
-function AnimatedCounter({ end, duration = 2000, suffix = "" }: { end: number; duration?: number; suffix?: string }) {
-  const [count, setCount] = useState(0);
-  const { ref, isInView } = useInView();
-
-  useEffect(() => {
-    if (!isInView) return;
-
-    let startTime: number;
-    const animate = (currentTime: number) => {
-      if (!startTime) startTime = currentTime;
-      const progress = Math.min((currentTime - startTime) / duration, 1);
-      setCount(Math.floor(progress * end));
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-    requestAnimationFrame(animate);
-  }, [isInView, end, duration]);
-
-  return <span ref={ref}>{count.toLocaleString()}{suffix}</span>;
 }
 
 // Navigation component

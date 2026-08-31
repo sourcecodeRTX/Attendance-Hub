@@ -26,8 +26,8 @@ Source of truth for *how it's being fixed*: this file.
 | 16 | Test-Quality Fixes | Complete | 2026-08-31 | c1142ca |
 | 17 | Medium Docs/UI-Text Contradictions | Complete | 2026-08-31 | e132374 |
 | 18 | Low Sweep — Lib Correctness | Complete | 2026-08-31 | 4865476 |
-| 19 | Low Sweep — Frontend UX/A11y Polish | Complete | 2026-08-31 | b797a3f |
-| 20 | Low Sweep — Ops/Tooling | Not started | | |
+| 19 | Low Sweep — Frontend UX/A11y Polish | Complete | 2026-08-31 | bca3ad1 |
+| 20 | Low Sweep — Ops/Tooling | Complete | 2026-08-31 |  |
 | 21 | CI Foundation | Not started | | |
 | 22 | Low Sweep — Final Docs/Text | Not started | | |
 | 23 | Compressed Re-Audit | Not started | | |
@@ -954,7 +954,71 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
   - `pnpm run build` EXIT=0 (all 24 routes prerender clean).
 - **Interactions with prior fixes**: Fully preserves Phase 6 sync engine invariants, Phase 8 CSV contracts, Phase 12/13 accessibility semantics, and Phase 15 log retention rules.
 - **Residual risk / follow-ups**: None.
+- **Commit**: bca3ad1 — fix(phase19): frontend UX and accessibility polish
+
+## Phase 20 Notes
+
+**Date:** 2026-08-31. **Scope:** Ops/Tooling Sweep (F-028 unused heavy dependencies removal, F-030 baseline lint warnings cleanup & exhaustive-deps fix, eslint rule strictness upgrade, tsconfig casing strictness, package.json typecheck script, and automated ops invariants tests).
+
+### [FIXED] Unused heavy dependencies (F-028)
+
+- **Original severity**: Low
+- **Phase**: 20 — Low Sweep — Ops/Tooling
+- **Files changed**: `package.json`, `pnpm-lock.yaml`
+- **Re-verification (Step 1)**: Confirmed on current code — `xlsx@^0.18.5`, `@google/generative-ai@^0.24.1`, and `shadcn@^4.0.6` were installed in `package.json` dependencies with zero imports anywhere in `src/`.
+- **Root cause (Step 2)**: Stale dependencies retained from early prototyping scaffolds; `xlsx` has known supply-chain vulnerabilities and added installation overhead without providing any runtime functionality (CSV handled by `papaparse`, PDF by `@react-pdf/renderer`).
+- **Edge cases enumerated (Step 3)**:
+  - *Export functionality*: CSV export (`csv-export.ts`) and import (`csv-import.ts`) rely exclusively on `papaparse`; PDF export relies on `@react-pdf/renderer`; JSON backup relies on `jszip`. Zero reliance on `xlsx`.
+  - *AI features*: No generative AI code exists in `src/`.
+  - *UI components*: All UI primitives wrap `@base-ui/react`; `shadcn` CLI is unnecessary as a runtime production dependency.
+  - *Supply-chain footprint*: `pnpm remove xlsx @google/generative-ai shadcn` trimmed 219 transitive packages from node_modules and pnpm lockfile.
+- **Fix design considered (Step 4)**: (a) keep unused packages — increases attack surface and install time; (b) remove all unreferenced heavy dependencies via package manager — chosen (matches audit direction).
+- **Fix applied (Step 5)**: Executed `pnpm remove xlsx @google/generative-ai shadcn`, updating `package.json` and `pnpm-lock.yaml`.
+- **Tests added/modified (Step 6)**: `src/test/phase20-ops-tooling.test.ts` (4 tests) asserts `xlsx`, `@google/generative-ai`, and `shadcn` are absent from `dependencies` and `devDependencies`.
+- **Full verification result (Step 7)**: `pnpm run lint` EXIT=0 (0 warnings, 0 errors); `pnpm exec tsc --noEmit` EXIT=0 clean; `pnpm run test` EXIT=0 (40 test files / 312 tests passed); `pnpm run build` EXIT=0 (all 24 routes prerender clean).
+- **Interactions with prior fixes**: Reconciles F-028; validates Phase 8 CSV contracts and Phase 10 README claims.
+- **Residual risk / follow-ups**: None.
 - **Commit**: see tracker.
 
+### [FIXED] Baseline lint warnings (17) include a real exhaustive-deps issue (F-030) & Ops/Tooling Sweep
 
-
+- **Original severity**: Low
+- **Phase**: 20 — Low Sweep — Ops/Tooling
+- **Files changed**: `src/app/page.tsx`, `src/app/(dashboard)/attendance/page.tsx`, `src/app/(dashboard)/cr-management/page.tsx`, `src/app/(dashboard)/dashboard/page.tsx`, `src/app/(dashboard)/export/page.tsx`, `src/app/(dashboard)/sections/page.tsx`, `src/app/(dashboard)/subjects/page.tsx`, `src/components/providers/auth-provider.tsx`, `src/lib/db/subjects.ts`, `.eslintrc.json`, `tsconfig.json`, `package.json`, `src/test/phase20-ops-tooling.test.ts`
+- **Re-verification (Step 1)**: Audited all 14 remaining ESLint warnings:
+  1. `src/app/page.tsx:43:6`: `useInView` hook missing `options` in `useEffect` dependency array (`react-hooks/exhaustive-deps`).
+  2. `src/app/page.tsx:49:10`: Dead `AnimatedCounter` component defined but unmounted.
+  3. `src/app/(dashboard)/attendance/page.tsx:30:3`: Unused `UserSubject` type import.
+  4. `src/app/(dashboard)/cr-management/page.tsx:5:10`: Unused `getUserSections` import.
+  5. `src/app/(dashboard)/dashboard/page.tsx:19:10`: Unused `getUserSections` import.
+  6. `src/app/(dashboard)/export/page.tsx:9:10`: Unused `getUserSections` import.
+  7. `src/app/(dashboard)/sections/page.tsx:3:44, 15:3, 17:10, 17:29`: Unused `useMemo`, `updateSection`, `createUserSection`, `deleteUserSectionsByUser` imports.
+  8. `src/app/(dashboard)/subjects/page.tsx:5:10, 6:10`: Unused `getSubjects`, `getUserSections` imports.
+  9. `src/components/providers/auth-provider.tsx:162:17`: Unused `startedAt` / `elapsedMs` timing variables.
+  10. `src/lib/db/subjects.ts:119:11`: Unused `subjectSecs` array query in `deleteSubject`.
+- **Root cause (Step 2)**: Undestructured hook options argument missing from dependency array; stale leftover imports from pre-refactor phases; dead component definitions; unused local query assignments.
+- **Edge cases enumerated (Step 3)**:
+  - *Intersection Observer Stability*: `useInView` destructures `{ threshold = 0.1, root, rootMargin }` and specifies them in the `useEffect` dependency array `[threshold, root, rootMargin]`, avoiding stale closure bugs without unstable object reference re-triggers.
+  - *Strict Lint Enforcement*: Upgraded `@typescript-eslint/no-unused-vars` from `"warn"` to `"error"` in `.eslintrc.json`, ensuring future unused variables fail CI/lint immediately.
+  - *TypeScript Cross-Platform Casing*: Added `"forceConsistentCasingInFileNames": true` to `tsconfig.json` to prevent Windows vs Linux/CI casing regressions.
+  - *Lifecycle Scripts*: Added `"typecheck": "tsc --noEmit"` to `package.json` scripts.
+- **Fix design considered (Step 4)**: (a) disable lint rules or add ignore comments — hides defects; (b) fix root causes across all 10 locations, eliminate all warnings, and enforce `"error"` level for unused variables — chosen.
+- **Fix applied (Step 5)**:
+  - Refactored `useInView` in `src/app/page.tsx` and removed dead `AnimatedCounter`.
+  - Removed unused imports across attendance, cr-management, dashboard, export, sections, and subjects pages.
+  - Removed unused timing variables in `src/components/providers/auth-provider.tsx`.
+  - Removed redundant `subjectSecs` query in `src/lib/db/subjects.ts`.
+  - Configured `@typescript-eslint/no-unused-vars: "error"` in `.eslintrc.json`.
+  - Added `forceConsistentCasingInFileNames: true` in `tsconfig.json`.
+  - Added `"typecheck": "tsc --noEmit"` in `package.json`.
+- **Tests added/modified (Step 6)**:
+  - `src/test/phase20-ops-tooling.test.ts` (4 new tests) validating script presence, tsconfig options, eslint error configuration, and package dependency cleanliness.
+  - Full vitest suite with 40 files / 312 tests passing.
+- **Full verification result (Step 7)**:
+  - `pnpm run lint` EXIT=0 (0 warnings, 0 errors — clean output).
+  - `pnpm exec tsc --noEmit` EXIT=0 (clean).
+  - `pnpm run test` EXIT=0 (40 test files / 312 tests passed).
+  - `pnpm run build` EXIT=0 (all 24 routes prerender clean).
+- **Interactions with prior fixes**: Reconciles F-030; preserves Phase 18 lib corrections, Phase 19 frontend UX improvements, and full TypeScript integrity.
+- **Residual risk / follow-ups**: None.
+- **Commit**: see tracker.

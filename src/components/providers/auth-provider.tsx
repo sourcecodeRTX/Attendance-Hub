@@ -45,7 +45,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const loadPromise = (async (): Promise<boolean> => {
-        const startedAt = Date.now();
         const readProfile = async () => {
           const { data, error } = await supabase
             .from('users')
@@ -158,8 +157,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               }
             })(),
           ]);
-
-          const elapsedMs = Date.now() - startedAt;
 
           return true;
         } catch (error) {
