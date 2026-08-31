@@ -28,7 +28,7 @@ Source of truth for *how it's being fixed*: this file.
 | 18 | Low Sweep — Lib Correctness | Complete | 2026-08-31 | 4865476 |
 | 19 | Low Sweep — Frontend UX/A11y Polish | Complete | 2026-08-31 | bca3ad1 |
 | 20 | Low Sweep — Ops/Tooling | Complete | 2026-08-31 | 43fa22d |
-| 21 | CI Foundation | Not started | | |
+| 21 | CI Foundation | Complete | 2026-08-31 | |
 | 22 | Low Sweep — Final Docs/Text | Not started | | |
 | 23 | Compressed Re-Audit | Not started | | |
 | 24 | Final Docs/README Sync | Not started | | |
@@ -1022,3 +1022,40 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Interactions with prior fixes**: Reconciles F-030; preserves Phase 18 lib corrections, Phase 19 frontend UX improvements, and full TypeScript integrity.
 - **Residual risk / follow-ups**: None.
 - **Commit**: 43fa22d — fix(phase20): ops and tooling sweep — closes: Unused heavy dependencies, Baseline lint warnings (17) include a real exhaustive-deps issue
+
+## Phase 21 Notes
+
+**Date:** 2026-08-31. **Scope:** CI Foundation (GitHub Actions continuous integration workflow running lint + tsc/typecheck + vitest unit/integration tests + production build verification on PRs and pushes to main, pinned action versions, dependency audit gate, and automated CI invariants tests).
+
+### [FIXED] CI Foundation — Continuous Integration Workflow & Quality Gates
+
+- **Original severity**: Low
+- **Phase**: 21 — CI Foundation
+- **Files changed**: `.github/workflows/ci.yml` (new), `src/test/phase21-ci-foundation.test.ts` (new)
+- **Re-verification (Step 1)**: Confirmed on current code — no continuous integration pipeline existed in `.github/workflows/`. Quality gates (`lint`, `typecheck`, `test`, `build`, and dependency vulnerability auditing) had to be run manually and locally, risking broken builds, type regressions, lint violations, security vulnerabilities, or failing tests getting merged into `main`.
+- **Root cause (Step 2)**: Missing GitHub Actions continuous integration infrastructure and automated verification pipeline configuration.
+- **Edge cases enumerated (Step 3)**:
+  - *Branch & Event Triggers*: Runs automatically on `push` to `main`, `pull_request` targeting `main`, and supports manual `workflow_dispatch` triggering.
+  - *Concurrency & Stale Run Cancellation*: Configured with `concurrency` group and `cancel-in-progress: ${{ github.event_name == 'pull_request' }}` to eliminate wasted CI runner minutes on superseded PR commits while allowing main branch pushes to finish.
+  - *Least Privilege Permissions*: Scoped to `permissions: contents: read`.
+  - *Action Version Pinning*: Uses pinned major actions (`actions/checkout@v4`, `pnpm/action-setup@v4`, `actions/setup-node@v4`) to guard against upstream supply-chain mutations.
+  - *Deterministic Package Installation*: Enforces `pnpm install --frozen-lockfile` using pnpm v10 and Node.js v20 with pnpm store caching.
+  - *Dependency Vulnerability Gate*: Runs `pnpm audit --audit-level=critical --ignore-registry-errors` to block critical supply-chain vulnerabilities in dependencies while preventing external registry downtime from failing builds.
+  - *Headless Next.js Static Prerender Compilation*: Supplies required non-secret build-time environment variables (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_APP_URL`) fallback dummies, allowing static route generation in isolated CI runners without leaking live production secrets.
+  - *Verification Sequence & Strict Gate Order*: Executes `pnpm install --frozen-lockfile` -> `pnpm audit` -> `pnpm run lint` -> `pnpm run typecheck` -> `pnpm run test` -> `pnpm run build` sequentially, failing fast on early gate errors.
+- **Fix design considered (Step 4)**: (a) single monolithic script — opaque failure reporting; (b) GitHub Actions multi-step pipeline with pinned actions, pnpm caching, dependency audit gate, and full verification steps + automated structural test harness — chosen (matches protocol §4.4 requirements).
+- **Fix applied (Step 5)**:
+  - Created `.github/workflows/ci.yml` defining the complete quality-gate job with pinned actions, pnpm caching, critical vulnerability audit, linter, typechecker, vitest suite, and static build generation.
+  - Created `src/test/phase21-ci-foundation.test.ts` asserting workflow file existence, trigger events, concurrency, permissions, pinned action versions, runtime versioning, step ordering, and build environment configuration.
+- **Tests added/modified (Step 6)**:
+  - `src/test/phase21-ci-foundation.test.ts` (6 tests) validating `.github/workflows/ci.yml` existence, push/PR triggers on `main`, concurrency settings, pinned action versions, step execution sequence, and environment variable configuration.
+  - Pre-fix proof: Tests fail against pre-fix code (file does not exist before creation; missing steps or unpinned actions trigger test failures).
+- **Full verification result (Step 7)**:
+  - `pnpm run lint` EXIT=0 (0 warnings, 0 errors).
+  - `pnpm exec tsc --noEmit` EXIT=0 (clean).
+  - `pnpm run test` EXIT=0 (41 test files / 318 tests passed).
+  - `pnpm run build` EXIT=0 (all 24 routes prerender clean).
+- **Interactions with prior fixes**: Codifies the entire verification suite built across Phases 0–20 (`lint`, `tsc`, `vitest`, `build`, `typecheck` script from Phase 20) into an automated CI pipeline.
+- **Residual risk / follow-ups**: None.
+- **Commit**: see tracker.
+
