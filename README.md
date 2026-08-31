@@ -35,7 +35,7 @@
 - 🔐 **Enterprise-Grade Security**: Secure authentication, authorization, and data encryption using Supabase's powerful infrastructure.
 - 📶 **Robust Offline Support**: Continue working even without internet access. Data is synced automatically via IndexedDB using Dexie.js.
 - 📄 **Dynamic Document Generation**: Export reports to PDF via React-PDF, exchange data as CSV via Papaparse, and take full JSON backups packaged with JSZip.
-- 🎨 **Sleek, Modern UI/UX**: Designed with beautiful components from Shadcn UI, fully responsive Tailwind CSS layouts, and elegant animations.
+- 🎨 **Sleek, Modern UI/UX**: Designed with accessible component primitives from Base UI, fully responsive Tailwind CSS layouts, and elegant animations.
 - ⚡ **Lightning Fast Performance**: Leverages Next.js App Router for optimal rendering, fast load times, and improved SEO.
 
 ## 💻 Tech Stack

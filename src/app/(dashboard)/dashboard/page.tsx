@@ -46,7 +46,7 @@ function calcAttendancePercent(sessions: AttendanceSession[]): number {
   return total === 0 ? 0 : Math.round((present / total) * 100);
 }
 
-/* â”€â”€ Shared UI pieces â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ---------------- Shared UI pieces ---------------- */
 
 function StatCard({ icon, title, value }: { icon: React.ReactNode; title: string; value: string | number }) {
   return (
@@ -109,7 +109,7 @@ function ActivityFeed({ activities }: { activities: ActivityLog[] }) {
   );
 }
 
-/* â”€â”€ Super Admin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ---------------- Super Admin ---------------- */
 
 function SuperAdminDashboard() {
   const { user, university } = useAuthStore();
@@ -241,7 +241,7 @@ function SuperAdminDashboard() {
   );
 }
 
-/* â”€â”€ Admin (department-scoped) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ---------------- Admin (department-scoped) ---------------- */
 
 function AdminDashboard() {
   const { user, university } = useAuthStore();
@@ -617,7 +617,7 @@ function TeacherDashboard() {
 }
 
 
-/* â”€â”€ CR (section-scoped) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ---------------- CR (section-scoped) ---------------- */
 
 function CRDashboard() {
   const { user, university } = useAuthStore();
@@ -764,7 +764,7 @@ function CRDashboard() {
   );
 }
 
-/* â”€â”€ Main page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ---------------- Main page ---------------- */
 
 export default function DashboardPage() {
   const { user, university } = useAuthStore();

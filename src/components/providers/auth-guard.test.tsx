@@ -150,4 +150,23 @@ describe('AuthGuard (F-021)', () => {
 
     expect(replaceMock).toHaveBeenCalledWith('/change-password');
   });
+
+  it('redirects unauthorized role to /dashboard when accessing /backup without super_admin role', () => {
+    currentPathname = '/backup';
+    useAuthStore.setState({
+      user: mockTeacher, // primary_teacher
+      isLoading: false,
+      isHydrated: true,
+      isVerified: true,
+    });
+
+    render(
+      <AuthGuard>
+        <div data-testid="protected-content">Backup Content</div>
+      </AuthGuard>
+    );
+
+    expect(replaceMock).toHaveBeenCalledWith('/dashboard');
+  });
 });
+

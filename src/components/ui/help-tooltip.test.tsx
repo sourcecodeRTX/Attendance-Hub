@@ -76,3 +76,22 @@ describe('HelpTooltip keyboard access (a11y)', () => {
     expect(secondId).not.toBe(firstId);
   });
 });
+
+describe('HELP_TOOLTIPS text consistency', () => {
+  it('correctly describes section creation workflow (selecting branch, then specialisation)', async () => {
+    const { HELP_TOOLTIPS } = await import('./help-tooltip');
+    expect(HELP_TOOLTIPS.sectionCreate).toBe(
+      'Create a new section by entering a name, selecting a branch, and optionally choosing a specialisation within that branch.'
+    );
+    expect(HELP_TOOLTIPS.sectionCreate).not.toContain('automatically determined from the specialisation');
+  });
+
+  it('correctly defines administrative role responsibilities', async () => {
+    const { HELP_TOOLTIPS } = await import('./help-tooltip');
+    expect(HELP_TOOLTIPS.superAdmin).toContain('Super Admin');
+    expect(HELP_TOOLTIPS.admin).toContain('Department Admin');
+    expect(HELP_TOOLTIPS.primaryTeacher).toContain('Primary Teacher');
+    expect(HELP_TOOLTIPS.regularTeacher).toContain('Regular Teacher');
+  });
+});
+

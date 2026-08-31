@@ -951,7 +951,7 @@ export default function StudentsPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".csv,.xlsx,.xls"
+                  accept=".csv"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];

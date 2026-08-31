@@ -21,6 +21,7 @@ const ROUTE_PERMISSIONS: Record<string, UserRole[]> = {
   '/cr-management': ['primary_teacher'],
   '/sync': ['super_admin', 'admin', 'primary_teacher', 'regular_teacher', 'cr'],
   '/change-password': ['super_admin', 'admin', 'primary_teacher', 'regular_teacher', 'cr'],
+  '/backup': ['super_admin'],
 };
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {

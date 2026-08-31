@@ -263,7 +263,7 @@ export const HELP_TOOLTIPS = {
   dutyLeave:
     "Duty Leave (DL) is when a student is absent from class but on official duty (events, competitions, etc.). DL doesn't count against their attendance.",
   sectionCreate:
-    "Create a new section by entering a name and selecting a specialisation. The branch is automatically determined from the specialisation.",
+    "Create a new section by entering a name, selecting a branch, and optionally choosing a specialisation within that branch.",
   subjectCreate:
     "Create a new subject with a name and code, then select one or more sections where this subject will be taught. Subjects can be assigned to multiple sections.",
   teacherAssignment:

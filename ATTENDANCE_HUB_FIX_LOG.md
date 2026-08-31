@@ -24,7 +24,7 @@ Source of truth for *how it's being fixed*: this file.
 | 14 | State Management & Hooks Robustness | Complete | 2026-08-23 | 3822942 |
 | 15 | Backup/Restore & Activity-Log Correctness | Complete | 2026-08-31 | 87a9922 |
 | 16 | Test-Quality Fixes | Complete | 2026-08-31 | c1142ca |
-| 17 | Medium Docs/UI-Text Contradictions | Not started | | |
+| 17 | Medium Docs/UI-Text Contradictions | Complete | 2026-08-31 |  |
 | 18 | Low Sweep — Lib Correctness | Not started | | |
 | 19 | Low Sweep — Frontend UX/A11y Polish | Not started | | |
 | 20 | Low Sweep — Ops/Tooling | Not started | | |
@@ -799,4 +799,52 @@ These 17 lint warnings are the pre-existing baseline; they are NOT auto-findings
 - **Interactions with prior fixes**: Validates F-013 (`deleteSection` junction cascade), F-008 (`parseStudentsCsv`), and F-019 (`realtime`).
 - **Residual risk / follow-ups**: None.
 - **Commit**: see tracker.
+
+## Phase 17 Notes
+
+**Date:** 2026-08-31. **Scope:** Medium Docs/UI-Text Contradictions.
+
+### [FIXED] Medium Docs, UI-Text & Route Authorization Contradictions
+
+- **Original severity**: Medium
+- **Phase**: 17 — Medium Docs/UI-Text Contradictions
+- **Files changed**: `src/components/providers/auth-guard.tsx`, `src/lib/constants/navigation.ts`, `src/components/ui/help-tooltip.tsx`, `src/app/(dashboard)/students/page.tsx`, `src/app/page.tsx`, `README.md`, `src/app/(dashboard)/dashboard/page.tsx`, `src/lib/constants/navigation.test.ts` (new), `src/components/providers/auth-guard.test.tsx`, `src/components/ui/help-tooltip.test.tsx`
+- **Re-verification (Step 1)**: Audited entire codebase for documentation, help tooltip, navigation, and UI-text discrepancies vs runtime reality:
+  1. `src/app/(dashboard)/students/page.tsx:954`: The file input declared `accept=".csv,.xlsx,.xls"`. Following Phase 8 & 10 where `xlsx` was removed and `isAllowedCsvFile` strictly rejected `.xlsx`/`.xls`, offering Excel formats in the OS file picker contradicted the parser capability and caused immediate upload rejections.
+  2. `src/components/ui/help-tooltip.tsx`: `HELP_TOOLTIPS.sectionCreate` claimed "The branch is automatically determined from the specialisation", whereas in `sections/page.tsx`, the user explicitly selects the Branch first, which then filters available Specialisations.
+  3. `src/components/providers/auth-guard.tsx`: `ROUTE_PERMISSIONS` mapped all dashboard routes except `'/backup'`, failing to enforce client-side routing guard against unauthorized roles attempting direct URL navigation (reconciling F-020).
+  4. `src/lib/constants/navigation.ts`: `NAV_ITEMS.admin` contained singular names (`Specialisation`, `Section`, `Teacher`) and truncated `Logs`, contradicting page headers and the universal plural convention used throughout the app (`Branches`, `Subjects`, `Students`, `Departments`, `Activity Logs`).
+  5. `README.md:38`: Stated "Designed with beautiful components from Shadcn UI", directly contradicting the Base UI implementation documented in the Tech Stack section.
+  6. `src/app/page.tsx:599-601`: The landing page role section titled the `admin` role "University Admin" and claimed they "Manage departments, staff, and institution-wide policies" — a direct contradiction of Attendance Hub's architecture where `admin` is a Department Admin and `super_admin` manages the university.
+  7. `src/app/(dashboard)/dashboard/page.tsx`: Corrupted UTF-8 comment markers (`/* â”€â”€ ... */`) were left behind from legacy PowerShell text edits.
+- **Root cause (Step 2)**: Stale copy left un-synced after architectural transitions (removal of XLSX in Phase 8/10, migration of section-branch workflow, Base UI migration, and initial role scaffold).
+- **Edge cases enumerated (Step 3)**:
+  - *File Input Filter*: Native file pickers on Windows/macOS/Linux only show `.csv` files for student bulk upload, preventing accidental selection of unsupported `.xlsx`/`.xls` spreadsheets.
+  - *Route Protection Consistency*: `AuthGuard` now explicitly checks `'/backup': ['super_admin']`, redirecting unauthorized roles (primary_teacher, regular_teacher, admin, cr) to `/dashboard` before rendering the page component.
+  - *Tooltip Correctness*: Tooltip text accurately guides department admins through the Branch -> Specialisation sequence.
+  - *Navigation Uniformity*: Admin sidebar links now match the exact page titles and icon descriptors.
+  - *Marketing Honesty*: Landing page describes Department Admin and Super Admin capabilities accurately without inflating permissions or mislabeling roles.
+- **Fix design considered (Step 4)**: (a) leave minor UI inconsistencies for final sweep — rejected: protocol assigns Phase 17 specifically for Medium docs/UI contradictions; (b) systematically fix file input types, tooltip text, route guards, navigation labels, README claims, and landing page role descriptors with unit tests — chosen.
+- **Fix applied (Step 5)**:
+  - Updated `src/components/providers/auth-guard.tsx` to include `'/backup': ['super_admin']`.
+  - Standardized `NAV_ITEMS.admin` in `src/lib/constants/navigation.ts` to `Specialisations`, `Sections`, `Teachers`, `Activity Logs`.
+  - Corrected `HELP_TOOLTIPS.sectionCreate` in `src/components/ui/help-tooltip.tsx`.
+  - Updated file input in `src/app/(dashboard)/students/page.tsx` to `accept=".csv"`.
+  - Reconciled `roles` in `src/app/page.tsx` to title `admin` as `Department Admin` with accurate scope.
+  - Fixed `README.md` key features bullet to cite Base UI.
+  - Cleaned up corrupted comment section headers in `src/app/(dashboard)/dashboard/page.tsx`.
+- **Tests added/modified (Step 6)**:
+  - `src/lib/constants/navigation.test.ts` (2 tests): Asserts plural/descriptive labels for all admin nav items and presence of nav items across all roles.
+  - `src/components/providers/auth-guard.test.tsx` (+1 test): Asserts unauthorized roles attempting to access `/backup` are redirected to `/dashboard`.
+  - `src/components/ui/help-tooltip.test.tsx` (+2 tests): Asserts `HELP_TOOLTIPS.sectionCreate` accuracy and role descriptions.
+  - Pre-fix proof: All 3 tests failed against pre-fix code (0 redirects for `/backup`, received `'Specialisation'`, received old contradictory `sectionCreate` string).
+- **Full verification result (Step 7)**:
+  - `pnpm run lint` EXIT=0 (14 warnings <= baseline 17, 0 errors).
+  - `pnpm exec tsc --noEmit` EXIT=0 (clean).
+  - `pnpm run test` EXIT=0 (36 test files / 273 tests passed).
+  - `pnpm run build` EXIT=0 (all 24 routes prerender clean).
+- **Interactions with prior fixes**: Reconciles F-020 (`AuthGuard` `/backup` route permission); reinforces Phase 8/10 CSV-only format integrity; maintains accessibility and test hermeticity from Phases 12–16.
+- **Residual risk / follow-ups**: None.
+- **Commit**: see tracker.
+
 
