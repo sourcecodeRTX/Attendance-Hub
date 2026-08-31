@@ -23,7 +23,7 @@ Source of truth for *how it's being fixed*: this file.
 | 13 | Frontend Accessibility II + UX Honesty | Complete | 2026-08-23 | bbab2c6 |
 | 14 | State Management & Hooks Robustness | Complete | 2026-08-23 | 3822942 |
 | 15 | Backup/Restore & Activity-Log Correctness | Complete | 2026-08-31 | 87a9922 |
-| 16 | Test-Quality Fixes | Complete | 2026-08-31 | |
+| 16 | Test-Quality Fixes | Complete | 2026-08-31 | c1142ca |
 | 17 | Medium Docs/UI-Text Contradictions | Not started | | |
 | 18 | Low Sweep — Lib Correctness | Not started | | |
 | 19 | Low Sweep — Frontend UX/A11y Polish | Not started | | |
