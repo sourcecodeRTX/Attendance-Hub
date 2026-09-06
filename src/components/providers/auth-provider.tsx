@@ -247,6 +247,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return;
           }
 
+          const currentUser = useAuthStore.getState().user;
+          if (currentUser && currentUser.id === session.user.id) {
+            return;
+          }
+
           setLoading(true);
           try {
             const loaded = await loadUserProfile(session.user.id);
