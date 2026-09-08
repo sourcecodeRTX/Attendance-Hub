@@ -283,10 +283,10 @@ export default function BackupPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-10">
+    <div className="space-y-6 max-w-4xl mx-auto pb-10 w-full overflow-hidden">
       <div>
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <DatabaseBackup className="size-8 text-primary" />
+        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+          <DatabaseBackup className="size-7 sm:size-8 text-primary" />
           Data Management
         </h1>
         <p className="text-muted-foreground mt-2">
@@ -410,7 +410,7 @@ export default function BackupPage() {
             </p>
             <ul className="space-y-1 font-mono text-xs">
               {restoredCredentials.map((c) => (
-                <li key={c.email}>
+                <li key={c.email} className="break-all">
                   {c.fullName} ({c.email}): <strong>{c.temporaryPassword}</strong>
                 </li>
               ))}
@@ -451,7 +451,7 @@ export default function BackupPage() {
               value={wipeConfirmText}
               onChange={(e) => setWipeConfirmText(e.target.value)}
               disabled={!hasDownloadedBackup || isWiping}
-              className="max-w-md"
+              className="max-w-md w-full"
             />
           </div>
         </CardContent>
@@ -460,6 +460,7 @@ export default function BackupPage() {
             variant="destructive"
             disabled={!hasDownloadedBackup || isWiping || wipeConfirmText !== 'I Want To Delete'}
             onClick={handleWipe}
+            className="w-full sm:w-auto"
           >
             {isWiping ? (
               <Loader2 className="size-4 animate-spin mr-2" />

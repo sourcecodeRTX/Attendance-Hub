@@ -24,6 +24,7 @@ import { db } from '@/lib/db';
 import {
   Alert, AlertDescription, AlertTitle,
 } from '@/components/ui/alert';
+import { TruncateText } from '@/components/ui/truncate-text';
 import type { AttendanceSession, ActivityLog } from '@/lib/types';
 
 const ROLE_LABELS: Record<string, string> = {
@@ -204,8 +205,8 @@ function SuperAdminDashboard() {
             <CardDescription>Overview of all departments</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto rounded-md border">
-              <Table>
+            <div className="overflow-x-auto rounded-md border w-full">
+              <Table className="min-w-full">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Department</TableHead>
@@ -219,9 +220,13 @@ function SuperAdminDashboard() {
                 <TableBody>
                   {deptSummary.map((d) => (
                     <TableRow key={d.code}>
-                      <TableCell className="font-medium">{d.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <TruncateText text={d.name} maxLength={20} />
+                      </TableCell>
                       <TableCell>{d.code}</TableCell>
-                      <TableCell className="max-w-xs text-sm text-muted-foreground">{d.admins}</TableCell>
+                      <TableCell className="max-w-xs text-sm text-muted-foreground">
+                        <TruncateText text={d.admins} maxLength={25} />
+                      </TableCell>
                       <TableCell className="text-center">{d.sections}</TableCell>
                       <TableCell className="text-center">{d.students}</TableCell>
                       <TableCell className="text-center">
@@ -320,8 +325,8 @@ function AdminDashboard() {
             <CardDescription>All sections in your department</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto rounded-md border">
-              <Table>
+            <div className="overflow-x-auto rounded-md border w-full">
+              <Table className="min-w-full">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Section</TableHead>
@@ -353,8 +358,8 @@ function AdminDashboard() {
             <CardDescription>All active teachers assigned to your department</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto rounded-md border">
-              <Table>
+            <div className="overflow-x-auto rounded-md border w-full">
+              <Table className="min-w-full">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
@@ -543,7 +548,8 @@ function TeacherDashboard() {
             <CardDescription>Attendance breakdown by subject across all assigned sections</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
+            <div className="overflow-x-auto w-full">
+              <Table className="min-w-full">
               <TableHeader>
                 <TableRow>
                   <TableHead>Subject</TableHead>
@@ -575,6 +581,7 @@ function TeacherDashboard() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -703,7 +710,8 @@ function CRDashboard() {
             <CardTitle>Subject-wise Attendance</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
+            <div className="overflow-x-auto w-full">
+              <Table className="min-w-full">
               <TableHeader>
                 <TableRow>
                   <TableHead>Subject</TableHead>
@@ -723,6 +731,7 @@ function CRDashboard() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -737,7 +746,8 @@ function CRDashboard() {
             <CardDescription>Students below {threshold}% attendance</CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
+            <div className="overflow-x-auto w-full">
+              <Table className="min-w-full">
               <TableHeader>
                 <TableRow>
                   <TableHead>Roll Number</TableHead>
@@ -757,6 +767,7 @@ function CRDashboard() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -778,7 +789,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-hidden">
       <div>
         <h1 className="text-2xl font-bold">Welcome back, {user.fullName}</h1>
         <div className="mt-1 flex items-center gap-2">

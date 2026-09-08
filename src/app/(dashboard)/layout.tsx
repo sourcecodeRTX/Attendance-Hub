@@ -18,11 +18,11 @@ export default function DashboardLayout({
         Skip to main content
       </a>
       <OfflineBanner />
-      <div className="flex h-screen">
+      <div className="theme-creamy flex h-screen bg-background text-foreground">
         <Sidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header />
-          <main id="main-content" className="flex-1 overflow-y-auto p-4 lg:p-6">
+          <main id="main-content" className="flex-1 min-w-0 overflow-y-auto p-4 lg:p-6">
             {children}
           </main>
           <MobileNav />

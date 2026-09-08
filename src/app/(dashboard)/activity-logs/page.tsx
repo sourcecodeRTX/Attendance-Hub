@@ -51,7 +51,7 @@ import { ScrollText, Filter, Loader2, FileSpreadsheet, FileJson, Trash2, Setting
 import Papa from 'papaparse';
 import { sanitizeCsvRows } from '@/lib/utils/csv-export';
 import { LogRetentionWarning, isSaturday } from '@/components/shared/LogRetentionWarning';
-
+import { TruncateText } from '@/components/ui/truncate-text';
 const PAGE_SIZE = 50;
 
 const ACTION_TYPE_LABELS: Record<ActivityActionType, string> = {
@@ -433,7 +433,7 @@ export default function ActivityLogsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-hidden">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -768,8 +768,8 @@ export default function ActivityLogsPage() {
             </div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <Table>
+              <div className="overflow-x-auto w-full">
+                <Table className="min-w-full">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="whitespace-nowrap">Timestamp</TableHead>
@@ -799,15 +799,17 @@ export default function ActivityLogsPage() {
                         <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                           {ROLE_LABELS[log.performedByRole] ?? log.performedByRole}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap">{log.targetName ?? '-'}</TableCell>
+                        <TableCell className="max-w-[150px]">
+                          <TruncateText text={log.targetName} maxLength={20} />
+                        </TableCell>
                         <TableCell className="text-muted-foreground whitespace-nowrap">
                           {log.departmentName ?? '-'}
                         </TableCell>
                         <TableCell className="text-muted-foreground whitespace-nowrap">
                           {log.sectionName ?? '-'}
                         </TableCell>
-                        <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground">
-                          {formatDetails(log.details)}
+                        <TableCell className="max-w-[150px] sm:max-w-[200px] text-xs text-muted-foreground">
+                          <TruncateText text={formatDetails(log.details)} maxLength={30} />
                         </TableCell>
                       </TableRow>
                     ))}

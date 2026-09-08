@@ -43,6 +43,7 @@ import {
   Eye,
   RotateCw,
 } from 'lucide-react';
+import { TruncateText } from '@/components/ui/truncate-text';
 
 export default function SyncPage() {
   const { user, university } = useAuthStore();
@@ -158,7 +159,7 @@ export default function SyncPage() {
   if (!user) return null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-hidden">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold">Sync</h1>
         <div className="flex gap-2">
@@ -246,8 +247,8 @@ export default function SyncPage() {
             <p>Sync queue is empty. Everything is up to date.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
+          <div className="overflow-x-auto rounded-lg border w-full">
+            <Table className="min-w-full">
               <TableHeader>
                 <TableRow>
                   <TableHead>Collection</TableHead>
@@ -282,8 +283,8 @@ export default function SyncPage() {
                           {item.type}
                         </Badge>
                       </TableCell>
-                      <TableCell className="max-w-[120px] truncate font-mono text-xs">
-                        {item.docId}
+                      <TableCell className="max-w-[120px] font-mono text-xs">
+                        <TruncateText text={item.docId} maxLength={12} className="font-mono text-xs" />
                       </TableCell>
                       <TableCell>{item.retryCount}</TableCell>
                       <TableCell className="text-xs">

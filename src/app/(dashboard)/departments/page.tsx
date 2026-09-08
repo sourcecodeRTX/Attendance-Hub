@@ -42,6 +42,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
+import { TruncateText } from '@/components/ui/truncate-text';
+
 const createDeptFormSchema = z.object({
   name: z.string().min(2, 'Department name is required'),
   code: z
@@ -393,7 +395,7 @@ export default function DepartmentsPage() {
   if (!user || user.role !== 'super_admin') return null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-hidden">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Departments</h1>
@@ -428,8 +430,8 @@ export default function DepartmentsPage() {
             : 'No departments created yet'}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
-          <Table>
+        <div className="overflow-x-auto rounded-md border w-full">
+          <Table className="min-w-full">
             <TableHeader>
             <TableRow>
               <TableHead className="w-8" />
@@ -467,12 +469,18 @@ export default function DepartmentsPage() {
                         )}
                       </Button>
                     </TableCell>
-                    <TableCell className="font-medium">{dept.name}</TableCell>
+                    <TableCell className="font-medium">
+                      <TruncateText text={dept.name} maxLength={20} />
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">{dept.code}</Badge>
                     </TableCell>
-                    <TableCell>{primaryAdmin?.fullName ?? '\u2014'}</TableCell>
-                    <TableCell>{primaryAdmin?.email ?? '\u2014'}</TableCell>
+                    <TableCell>
+                      <TruncateText text={primaryAdmin?.fullName} maxLength={15} />
+                    </TableCell>
+                    <TableCell>
+                      <TruncateText text={primaryAdmin?.email} maxLength={20} />
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant={dept.isActive ? 'default' : 'destructive'}
@@ -508,9 +516,9 @@ export default function DepartmentsPage() {
                               {dept.admins.map((admin) => (
                                 <div
                                   key={admin.id}
-                                  className="flex items-center justify-between rounded-lg border bg-background p-3"
+                                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border bg-background p-3"
                                 >
-                                  <div className="space-y-1">
+                                  <div className="space-y-1 min-w-0">
                                     <p className="text-sm font-medium">
                                       {admin.fullName}
                                       {admin.id === dept.adminId && (
@@ -522,12 +530,12 @@ export default function DepartmentsPage() {
                                         </Badge>
                                       )}
                                     </p>
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-xs text-muted-foreground break-all">
                                       {admin.email} &middot; Staff ID:{' '}
                                       {admin.staffId}
                                     </p>
                                   </div>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                                     <Badge
                                       variant={
                                         admin.isActive
