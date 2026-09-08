@@ -39,7 +39,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    const loadUserProfile = async (uid: string): Promise<boolean> => {
+    const loadUserProfile = async (
+      uid: string,
+      options?: { background?: boolean }
+    ): Promise<boolean> => {
       if (loadingProfilePromiseRef.current) {
         return loadingProfilePromiseRef.current;
       }
@@ -174,8 +177,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let initDone = false;
 
     const handleSignedInSession = async (session: { user: { id: string; email?: string } }) => {
-      setCurrentUid(session.user.id);
       const currentUser = useAuthStore.getState().user;
+      const isVerified = useAuthStore.getState().isVerified;
+
+      // If already signed in and verified as this exact user, do not block UI or reload
+      if (currentUser && currentUser.id === session.user.id && isVerified) {
+        return;
+      }
+
+      setCurrentUid(session.user.id);
 
       // Prevent stale cross-account preferences/state on shared devices.
       if (currentUser && currentUser.id !== session.user.id) {
@@ -209,6 +219,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               userId: session.user.id,
               email: session.user.email,
             };
+            return;
+          }
+
+          const currentUser = useAuthStore.getState().user;
+          const isVerified = useAuthStore.getState().isVerified;
+          if (currentUser && currentUser.id === session.user.id && isVerified) {
+            // Tab switch, window focus, or token check for already verified user.
+            // Do NOT unmount the dashboard, do NOT toggle isLoading, do NOT block the UI.
             return;
           }
 
@@ -248,7 +266,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
 
           const currentUser = useAuthStore.getState().user;
-          if (currentUser && currentUser.id === session.user.id) {
+          const isVerified = useAuthStore.getState().isVerified;
+          if (currentUser && currentUser.id === session.user.id && isVerified) {
             return;
           }
 
@@ -278,10 +297,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (session?.user) {
-          setLoading(true);
-          const loaded = await loadUserProfile(session.user.id);
-          if (!loaded) {
-            await invalidateBrokenSession();
+          const currentUser = useAuthStore.getState().user;
+          const isVerified = useAuthStore.getState().isVerified;
+
+          if (currentUser && currentUser.id === session.user.id && isVerified) {
+            // Already hydrated and verified from persisted store!
+            // Keep UI interactive without blocking with a full-screen loading spinner.
+            setCurrentUid(session.user.id);
+            startSyncLoop();
+            setLoading(false);
+            // Non-blocking background refresh:
+            void loadUserProfile(session.user.id, { background: true });
+          } else {
+            setLoading(true);
+            const loaded = await loadUserProfile(session.user.id);
+            if (!loaded) {
+              await invalidateBrokenSession();
+            }
           }
         } else {
           // No active session — clear any stale unverified state from localStorage
@@ -297,12 +329,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (pendingSessionRef.current) {
           const pending = pendingSessionRef.current;
           pendingSessionRef.current = null;
-          await handleSignedInSession({
-            user: {
-              id: pending.userId,
-              email: pending.email,
-            },
-          });
+          const currentUser = useAuthStore.getState().user;
+          const isVerified = useAuthStore.getState().isVerified;
+          if (!currentUser || currentUser.id !== pending.userId || !isVerified) {
+            await handleSignedInSession({
+              user: {
+                id: pending.userId,
+                email: pending.email,
+              },
+            });
+          }
         }
 
         setLoading(false);

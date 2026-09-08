@@ -74,16 +74,16 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!isHydrated || isLoading || !isVerified) {
     return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div suppressHydrationWarning className="flex h-screen w-full items-center justify-center">
+        <div suppressHydrationWarning className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
     );
   }
 
   if (!user || !user.isActive) {
     return (
-      <div className="flex h-screen w-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div suppressHydrationWarning className="flex h-screen w-full items-center justify-center">
+        <div suppressHydrationWarning className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
       </div>
     );
   }

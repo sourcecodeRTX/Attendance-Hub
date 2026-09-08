@@ -73,11 +73,16 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  const isAuthenticated = !!session?.user;
+  let isAuthenticated = false;
+  try {
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser();
+    isAuthenticated = !error && !!user;
+  } catch {
+    isAuthenticated = false;
+  }
 
   if (!isAuthenticated && protectedPath) {
     const redirectUrl = request.nextUrl.clone();

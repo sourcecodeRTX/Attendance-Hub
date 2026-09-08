@@ -439,26 +439,25 @@ export async function pullFromCloud(universityId: string): Promise<void> {
   const supabase = createClient();
   const pendingIds = await collectPendingSyncDocIds();
 
-  for (const { remote, local } of PULL_TABLES) {
-    let rows: any[];
-    try {
-      rows = await fetchAllUniversityRows(supabase, remote, universityId);
-    } catch (error) {
-      console.error(`Pull failed for ${remote}:`, error);
-      continue;
-    }
-
-    const mapped = rows.map((row: any) => mapRemoteToLocal(remote, row));
-    if (mapped.length > 0) {
-      await local.bulkPut(mapped);
-    }
-    await reconcileDeletes(
-      local,
-      universityId,
-      new Set(mapped.map((m: any) => m.id)),
-      pendingIds
-    );
-  }
+  await Promise.all(
+    PULL_TABLES.map(async ({ remote, local }) => {
+      try {
+        const rows = await fetchAllUniversityRows(supabase, remote, universityId);
+        const mapped = rows.map((row: any) => mapRemoteToLocal(remote, row));
+        if (mapped.length > 0) {
+          await local.bulkPut(mapped);
+        }
+        await reconcileDeletes(
+          local,
+          universityId,
+          new Set(mapped.map((m: any) => m.id)),
+          pendingIds
+        );
+      } catch (error) {
+        console.error(`Pull failed for ${remote}:`, error);
+      }
+    })
+  );
 
   // subject_sections has no university_id column — scope it through the
   // university's subject ids (chunked to keep request URLs bounded). Only run
