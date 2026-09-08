@@ -23,7 +23,14 @@ export function isProtectedPath(pathname: string): boolean {
     return false;
   }
 
-  if (pathname === '/favicon.ico' || pathname === '/manifest.json') {
+  if (
+    pathname === '/favicon.ico' ||
+    pathname === '/manifest.json' ||
+    pathname.endsWith('.svg') ||
+    pathname.endsWith('.png') ||
+    pathname.endsWith('.ico') ||
+    pathname.endsWith('.webp')
+  ) {
     return false;
   }
 
@@ -46,7 +53,7 @@ export async function middleware(request: NextRequest) {
     publicResponse.headers.set('X-Content-Type-Options', 'nosniff');
     publicResponse.headers.set('X-Frame-Options', 'DENY');
     publicResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-    publicResponse.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    publicResponse.headers.set('Permissions-Policy', 'unload=*, camera=(), microphone=(), geolocation=()');
     return publicResponse;
   }
 
@@ -103,7 +110,7 @@ export async function middleware(request: NextRequest) {
   response.headers.set('X-Content-Type-Options', 'nosniff');
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  response.headers.set('Permissions-Policy', 'unload=*, camera=(), microphone=(), geolocation=()');
 
   return response;
 }

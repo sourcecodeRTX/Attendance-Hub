@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const loadUserProfile = async (
       uid: string,
-      options?: { background?: boolean }
+      _options?: { background?: boolean }
     ): Promise<boolean> => {
       if (loadingProfilePromiseRef.current) {
         return loadingProfilePromiseRef.current;
