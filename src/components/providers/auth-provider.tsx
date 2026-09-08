@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { signOut } from '@/lib/supabase/auth';
 import { useAuthStore, clearAllPersistedStores } from '@/lib/stores/auth-store';
 import { useUIStore } from '@/lib/stores/ui-store';
 import { usePreferencesStore } from '@/lib/stores/preferences-store';
@@ -33,7 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // random logout with no cause (UX honesty, F-024 arc).
       toast.error('Your session could not be verified. Please sign in again.');
       try {
-        await supabase.auth.signOut();
+        await signOut();
       } catch (signOutError) {
         console.error('Failed to sign out broken session:', signOutError);
       }

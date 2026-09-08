@@ -6,9 +6,50 @@ export async function signIn(email: string, password: string) {
   return supabase.auth.signInWithPassword({ email, password });
 }
 
+function isJwtExpired(token?: string): boolean {
+  if (!token) return true;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return true;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = typeof atob === 'function' ? atob(base64) : Buffer.from(base64, 'base64').toString('utf8');
+    const payload = JSON.parse(json);
+    return typeof payload.exp === 'number' && payload.exp * 1000 <= Date.now();
+  } catch {
+    return true;
+  }
+}
+
 export async function signOut() {
   const supabase = createClient();
-  return supabase.auth.signOut();
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+
+    // If there is no session, or the token is already expired/malformed,
+    // skip the remote network call to /auth/v1/logout which would trigger a 403 bad_jwt error.
+    if (!token || isJwtExpired(token)) {
+      if (typeof (supabase.auth as any)._removeSession === 'function') {
+        await (supabase.auth as any)._removeSession();
+      } else {
+        await supabase.auth.signOut({ scope: 'local' });
+      }
+      return { error: null };
+    }
+
+    const { error } = await supabase.auth.signOut({ scope: 'local' });
+    if (error && typeof (supabase.auth as any)._removeSession === 'function') {
+      await (supabase.auth as any)._removeSession();
+    }
+    return { error: null };
+  } catch {
+    if (typeof (supabase.auth as any)._removeSession === 'function') {
+      try {
+        await (supabase.auth as any)._removeSession();
+      } catch {}
+    }
+    return { error: null };
+  }
 }
 
 export async function signUp(email: string, password: string) {
